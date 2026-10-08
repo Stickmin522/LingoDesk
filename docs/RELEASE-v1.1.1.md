@@ -6,7 +6,7 @@ LingoDesk turns speech and audio playing on your Android device into live biling
 
 LingoDesk は、会話や Android 端末で再生する音声をリアルタイムで二言語字幕にし、議事メモにまとめるアプリです。
 
-<p><img src="https://raw.githubusercontent.com/Stickmin522/LingoDesk/v1.1.1/docs/images/icon.svg" width="112" alt="LingoDesk / 听译台" /></p>
+<p align="center"><img src="https://raw.githubusercontent.com/Stickmin522/LingoDesk/v1.1.1/docs/images/icon.svg" width="112" alt="LingoDesk / 听译台" /></p>
 
 ## Screenshots / 运行截图 / スクリーンショット
 

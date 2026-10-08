@@ -4,7 +4,7 @@
 
 LingoDesk turns speech and audio playing on your Android device into live bilingual captions and meeting notes. Use it for lectures, online courses, meetings and conversations, with floating captions you can read while using other apps.
 
-<p><img src="docs/images/icon.svg" width="112" alt="LingoDesk app icon" /></p>
+<p align="center"><img src="docs/images/icon.svg" width="112" alt="LingoDesk app icon" /></p>
 
 ## Screenshots
 
@@ -39,3 +39,7 @@ Speech recognition, live translation and meeting notes use the LecSync API and r
 ## Build from source
 
 See the [build guide](docs/BUILD.md).
+
+## Keywords
+
+Android, Flutter, Rust, Kotlin, live translation, speech-to-text, bilingual captions, floating subtitles, background recording, audio recording, system audio capture, AudioPlaybackCapture, MediaProjection, ARM64, Android 17, Japanese–Chinese translation, English–Chinese translation, meeting notes.

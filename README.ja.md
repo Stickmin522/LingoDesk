@@ -4,7 +4,7 @@
 
 LingoDesk は、会話や Android 端末で再生する音声をリアルタイムで二言語字幕にし、議事メモにまとめるアプリです。授業、オンライン講座、会議、日常会話に使えます。ほかのアプリを使いながら、フローティング字幕で訳文を読むこともできます。
 
-<p><img src="docs/images/icon.svg" width="112" alt="LingoDesk のアプリアイコン" /></p>
+<p align="center"><img src="docs/images/icon.svg" width="112" alt="LingoDesk のアプリアイコン" /></p>
 
 ## スクリーンショット
 
@@ -39,3 +39,7 @@ Android 10 以降の ARM64 端末に対応しています。アプリの表示�
 ## ソースからビルド
 
 [ビルド手順](docs/BUILD.md)を参照してください。
+
+## 関連キーワード
+
+Android、Flutter、Rust、Kotlin、リアルタイム翻訳、音声認識、二言語字幕、フローティング字幕、バックグラウンド録音、音声録音、システム音声、AudioPlaybackCapture、MediaProjection、ARM64、Android 17、日中翻訳、英中翻訳、議事メモ。

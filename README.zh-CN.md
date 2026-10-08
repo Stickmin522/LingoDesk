@@ -4,7 +4,7 @@
 
 听译台可以把说话声和手机播放的音频实时转换为双语字幕，并整理成纪要。适合课堂、网课、会议和日常对话，也可以用悬浮字幕边看其他应用边听译。
 
-<p><img src="docs/images/icon.svg" width="112" alt="听译台 APP 图标" /></p>
+<p align="center"><img src="docs/images/icon.svg" width="112" alt="听译台 APP 图标" /></p>
 
 ## 运行截图
 
@@ -39,3 +39,7 @@
 ## 从源码构建
 
 见[构建说明](docs/BUILD.md)。
+
+## 相关词条
+
+Android、Flutter、Rust、Kotlin、实时翻译、同声听译、语音转文字、双语字幕、悬浮字幕、后台录音、音频录制、系统音频、AudioPlaybackCapture、MediaProjection、ARM64、Android 17、日语中文翻译、英语中文翻译、会议纪要。
