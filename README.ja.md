@@ -4,7 +4,7 @@
 
 LingoDesk は、会話や Android 端末で再生する音声をリアルタイムで二言語字幕にし、議事メモにまとめるアプリです。授業、オンライン講座、会議、日常会話に使えます。ほかのアプリを使いながら、フローティング字幕で訳文を読むこともできます。
 
-<p align="center"><img src="docs/images/icon.svg" width="112" alt="LingoDesk のアプリアイコン" /></p>
+<p align="center"><img src="docs/images/lingodesk-logo-rounded.png" width="240" height="240" alt="LingoDesk のアプリアイコン" /></p>
 
 ## スクリーンショット
 

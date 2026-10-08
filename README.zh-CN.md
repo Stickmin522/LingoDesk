@@ -4,7 +4,7 @@
 
 听译台可以把说话声和手机播放的音频实时转换为双语字幕，并整理成纪要。适合课堂、网课、会议和日常对话，也可以用悬浮字幕边看其他应用边听译。
 
-<p align="center"><img src="docs/images/icon.svg" width="112" alt="听译台 APP 图标" /></p>
+<p align="center"><img src="docs/images/lingodesk-logo-rounded.png" width="240" height="240" alt="听译台 APP 图标" /></p>
 
 ## 运行截图
 

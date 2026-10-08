@@ -4,7 +4,7 @@
 
 LingoDesk turns speech and audio playing on your Android device into live bilingual captions and meeting notes. Use it for lectures, online courses, meetings and conversations, with floating captions you can read while using other apps.
 
-<p align="center"><img src="docs/images/icon.svg" width="112" alt="LingoDesk app icon" /></p>
+<p align="center"><img src="docs/images/lingodesk-logo-rounded.png" width="240" height="240" alt="LingoDesk app icon" /></p>
 
 ## Screenshots
 
