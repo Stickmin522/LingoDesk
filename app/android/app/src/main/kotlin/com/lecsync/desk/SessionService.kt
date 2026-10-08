@@ -31,6 +31,7 @@ class SessionService : Service() {
     private var source="mic"
     private var device="default"
     private var previousPhase=""
+    private var previousLanguage=""
     private var capturing=false
     private var overlayEngine:FlutterEngine?=null
     private var overlayBridge:Bridge?=null
@@ -43,7 +44,7 @@ class SessionService : Service() {
     private var stoppingProjection=false
     private var wake:PowerManager.WakeLock?=null
     override fun onBind(intent:Intent?):IBinder?=null
-    override fun onCreate(){super.onCreate();instance=this;wake=getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"$packageName:recording").apply{setReferenceCounted(false)};getSystemService(NotificationManager::class.java).createNotificationChannel(NotificationChannel("recording","录音与悬浮字幕",NotificationManager.IMPORTANCE_LOW));handler.post(poll)}
+    override fun onCreate(){super.onCreate();instance=this;wake=getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"$packageName:recording").apply{setReferenceCounted(false)};getSystemService(NotificationManager::class.java).createNotificationChannel(NotificationChannel("recording",AppLanguages.text(this,"录音与悬浮字幕"),NotificationManager.IMPORTANCE_LOW));handler.post(poll)}
     override fun onStartCommand(intent:Intent?,flags:Int,startId:Int):Int {
         try {
             when(intent?.action){
@@ -57,17 +58,16 @@ class SessionService : Service() {
                     if(source!="mic")grantProjection(intent)
                     previousPhase="";val response=JSONObject(NativeCore.command(JSONObject().put("op","start").put("config",config).toString()));if(response.has("error"))error(response.optString("error"))
                 }
-                "overlay"->{overlayDismissed=false;if(!sessionActive)foreground("悬浮字幕已开启",specialType());prepareOverlay();refreshOverlay()}
+                "overlay"->{enableOverlay();if(!sessionActive)stopSelf()}
                 "resumeProjection"->{grantProjection(intent);control("resume")}
                 "pause","resume","stop"->control(intent.action!!)
             }
-        }catch(e:Exception){warn(e.message?:"录音启动失败");NativeCore.command(JSONObject().put("op","fail").put("message",e.message?:"录音启动失败").toString());stopAudio();releaseProjection();recordingTypes=0;sessionActive=false;if(SettingsStore.read(this).optBoolean("overlay"))foreground("录音启动失败",specialType())else stopSelf()}
+        }catch(e:Exception){warn(e.message?:"录音启动失败");NativeCore.command(JSONObject().put("op","fail").put("message",e.message?:"录音启动失败").toString());stopAudio();releaseProjection();recordingTypes=0;sessionActive=false;destroyOverlay();stopSelf()}
         return START_NOT_STICKY
     }
-    private fun specialType()=if(Build.VERSION.SDK_INT>=34)ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0
     private fun foreground(text:String,types:Int){
         val open=PendingIntent.getActivity(this,0,Intent(this,MainActivity::class.java),PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val notification=Notification.Builder(this,"recording").setSmallIcon(com.lecsync.desk.R.drawable.ic_notification).setContentTitle("听译台").setContentText(text).setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true).build()
+        val notification=Notification.Builder(this,"recording").setSmallIcon(com.lecsync.desk.R.drawable.ic_notification).setContentTitle(AppLanguages.text(this,"听译台")).setContentText(AppLanguages.text(this,text)).setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true).build()
         startForeground(7,notification,types)
     }
     private fun grantProjection(intent:Intent){
@@ -81,13 +81,14 @@ class SessionService : Service() {
     private val poll=object:Runnable{override fun run(){
         val state=JSONObject(NativeCore.command("{\"op\":\"snapshot\"}"));val p=state.optString("phase","idle")
         if(p=="recording"){if(wake?.isHeld==false)wake?.acquire()}else if(wake?.isHeld==true)wake?.release()
-        if(p!=previousPhase){previousPhase=p
+        val language=AppLanguages.resolve(this@SessionService,getSharedPreferences("desk",MODE_PRIVATE).getString("uiLanguage","system")?:"system")
+        if(p!=previousPhase||language!=previousLanguage){previousPhase=p;previousLanguage=language
             if(p=="recording"&&!capturing)startAudio()
             if(p in listOf("paused","ended","stopping","pausing"))stopAudio()
-            if(p=="ended"){releaseProjection();recordingTypes=0;sessionActive=false;if(SettingsStore.read(this@SessionService).optBoolean("overlay"))foreground("录音已保存 · 悬浮字幕已开启",specialType())else{Bridge.broadcast();stopSelf();return}}
+            if(p=="ended"){releaseProjection();recordingTypes=0;sessionActive=false;destroyOverlay();Bridge.broadcast();stopSelf();return}
             else if(sessionActive)foreground(when(p){"recording"->"正在录音与翻译";"paused"->"已暂停 · 不上传音频";"connecting"->"正在连接";else->"正在处理"},recordingTypes)
         }
-        Bridge.broadcast();handler.postDelayed(this,250)
+        refreshOverlay();Bridge.broadcast();handler.postDelayed(this,250)
     }}
     private fun buildAudio(playback:Boolean):AudioRecord {
         val format=AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(16000).setChannelMask(AudioFormat.CHANNEL_IN_MONO).build()
@@ -115,9 +116,11 @@ class SessionService : Service() {
     private fun releaseProjection(){stoppingProjection=true;projection?.stop();projection=null;stoppingProjection=false}
     fun refreshOverlay(){
         val enabled=SettingsStore.read(this).optBoolean("overlay")&&Settings.canDrawOverlays(this)
-        if(enabled&&!overlayDismissed&&!MainActivity.visible)showOverlay()else hideOverlay()
-        if(!enabled&&!sessionActive)stopSelf()
+        val phase=JSONObject(NativeCore.command("{\"op\":\"snapshot\"}")).optString("phase")
+        if(OverlayPolicy.shouldShow(sessionActive,phase,enabled,overlayDismissed,MainActivity.visible))showOverlay()else hideOverlay()
+        if(!sessionActive)stopSelf()
     }
+    fun enableOverlay(){overlayDismissed=false;refreshOverlay()}
     fun dismissOverlay(){overlayDismissed=true;hideOverlay()}
     fun setOverlayControlsVisible(visible:Boolean){overlayRoot?.controlsVisible=visible}
     fun overlayInteraction(active:Boolean){overlayBridge?.overlayInteraction(active)}

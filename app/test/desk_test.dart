@@ -8,10 +8,13 @@ import 'package:listening_desk/main.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  setUp(() {
+  setUp(() async {
+    await AppStrings.load('zh');
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(PlatformDesk.channel, (call) async {
-          if (call.method == 'settings') return jsonEncode(defaults);
+          if (call.method == 'settings') {
+            return jsonEncode({...defaults, 'effectiveLocale': 'zh'});
+          }
           if (call.method == 'core') return '[]';
           return '{}';
         });

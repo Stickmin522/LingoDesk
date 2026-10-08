@@ -34,3 +34,4 @@ sessions/
 *.pfx
 *.pem
 *.key
+.gradle/

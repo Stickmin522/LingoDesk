@@ -4,8 +4,10 @@ plugins {
     id("com.android.application")
     id("dev.flutter.flutter-gradle-plugin")
 }
+val signingDirectory = providers.environmentVariable("LINGODESK_SIGNING_DIR").orNull?.let { file(it) }
+    ?: rootProject.file("../../.signing")
 val signingProperties = Properties().apply {
-    rootProject.file("../../.signing/key.properties").inputStream().use { load(it) }
+    signingDirectory.resolve("key.properties").inputStream().use { load(it) }
 }
 android {
     namespace = "com.lecsync.desk"
@@ -26,7 +28,7 @@ android {
     }
     signingConfigs {
         create("delivery") {
-            storeFile = rootProject.file("../../.signing/release.jks")
+            storeFile = signingDirectory.resolve("release.jks")
             storePassword = signingProperties.getProperty("storePassword")
             keyAlias = "desk"
             keyPassword = signingProperties.getProperty("keyPassword")
@@ -41,4 +43,7 @@ android {
 kotlin { compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17 } }
 flutter { source = "../.." }
 
-dependencies { implementation("com.google.mlkit:translate:17.0.3") }
+dependencies {
+    implementation("com.google.mlkit:translate:17.0.3")
+    testImplementation("junit:junit:4.13.2")
+}

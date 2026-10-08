@@ -1,0 +1,5 @@
+- Added all 60 supported translation languages with two separate language selectors and automatic two-way translation.
+- Prevented selecting the same language on both sides.
+- Floating captions now appear only during an active session after leaving the app.
+- Added 60 interface languages, system-language selection, English fallback, and right-to-left text support using system fonts.
+- Added Korean, French, Arabic, Spanish, and German project introductions.

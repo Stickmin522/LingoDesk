@@ -76,9 +76,9 @@ class _SessionPanelsState extends State<SessionPanels> {
                     ),
                     textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 12)),
                   ),
-                  segments: const [
-                    ButtonSegment(value: 0, label: Text('双语字幕')),
-                    ButtonSegment(value: 1, label: Text('实时纪要')),
+                  segments: [
+                    ButtonSegment(value: 0, label: Text(tr('双语字幕'))),
+                    ButtonSegment(value: 1, label: Text(tr('实时纪要'))),
                   ],
                   selected: {pane},
                   onSelectionChanged: (v) => setState(() => pane = v.first),
@@ -86,7 +86,7 @@ class _SessionPanelsState extends State<SessionPanels> {
               ),
               if (widget.onOverlay != null)
                 IconButton(
-                  tooltip: '悬浮字幕',
+                  tooltip: tr('悬浮字幕'),
                   onPressed: widget.onOverlay,
                   visualDensity: VisualDensity.compact,
                   icon: const Icon(
@@ -96,12 +96,12 @@ class _SessionPanelsState extends State<SessionPanels> {
                 ),
               if (widget.onModeChanged != null)
                 PopupMenuButton<String>(
-                  tooltip: '字幕显示',
+                  tooltip: tr('字幕显示'),
                   onSelected: widget.onModeChanged,
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'both', child: Text('原文与译文')),
-                    PopupMenuItem(value: 'source', child: Text('仅原文')),
-                    PopupMenuItem(value: 'translation', child: Text('仅译文')),
+                  itemBuilder: (_) => [
+                    PopupMenuItem(value: 'both', child: Text(tr('原文与译文'))),
+                    PopupMenuItem(value: 'source', child: Text(tr('仅原文'))),
+                    PopupMenuItem(value: 'translation', child: Text(tr('仅译文'))),
                   ],
                 ),
             ],
@@ -142,13 +142,13 @@ class _SessionPanelsState extends State<SessionPanels> {
                           });
                         }),
                   icon: const Icon(Icons.play_circle_outline_rounded),
-                  label: const Text('回放'),
+                  label: Text(tr('回放')),
                 ),
                 TextButton(
                   onPressed: () => run(() async {
                     await PlatformDesk.call('stopPlayback');
                   }),
-                  child: const Text('停止回放'),
+                  child: Text(tr('停止回放')),
                 ),
                 ...['txt', 'srt', 'json', 'wav'].map(
                   (f) => TextButton(
@@ -160,7 +160,7 @@ class _SessionPanelsState extends State<SessionPanels> {
                               'format': f,
                             });
                           }),
-                    child: Text(f == 'wav' ? '录音 WAV' : f.toUpperCase()),
+                    child: Text(f == 'wav' ? tr('录音 WAV') : f.toUpperCase()),
                   ),
                 ),
               ],
@@ -241,13 +241,13 @@ class _DigestFeedState extends State<DigestFeed> {
     final status = record['digestStatus'] as String? ?? '';
     final error = record['digestError'] as String? ?? '';
     if (sections.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
+          padding: const EdgeInsets.all(24),
           child: Text(
-            '实时纪要将在这里整理\n字幕继续在“双语字幕”页更新',
+            tr('实时纪要将在这里整理\n字幕继续在“双语字幕”页更新'),
             textAlign: TextAlign.center,
-            style: TextStyle(height: 1.8),
+            style: const TextStyle(height: 1.8),
           ),
         ),
       );
@@ -259,7 +259,9 @@ class _DigestFeedState extends State<DigestFeed> {
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
             child: Text(
-              status == 'preparing' ? '正在准备中文纪要语言包，录音继续进行…' : '正在更新中文纪要…',
+              status == 'preparing'
+                  ? tr('正在准备中文纪要语言包，录音继续进行…')
+                  : tr('正在更新中文纪要…'),
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
@@ -269,10 +271,10 @@ class _DigestFeedState extends State<DigestFeed> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(error, style: Theme.of(context).textTheme.bodySmall),
+                Text(tr(error), style: Theme.of(context).textTheme.bodySmall),
                 TextButton(
                   onPressed: () => refresh(retry: true),
-                  child: const Text('准备并重试中文纪要'),
+                  child: Text(tr('准备并重试中文纪要')),
                 ),
               ],
             ),
@@ -291,6 +293,7 @@ class _DigestFeedState extends State<DigestFeed> {
                 const SizedBox(height: 8),
                 SelectableText(
                   s['title'] as String,
+                  textDirection: contentDirection(s['title'] as String),
                   style: TextStyle(
                     fontSize: (widget.settings['fontSize'] as num? ?? 20)
                         .toDouble(),
@@ -309,6 +312,7 @@ class _DigestFeedState extends State<DigestFeed> {
                         Expanded(
                           child: SelectableText(
                             p,
+                            textDirection: contentDirection(p),
                             style: const TextStyle(height: 1.8),
                           ),
                         ),
@@ -322,7 +326,7 @@ class _DigestFeedState extends State<DigestFeed> {
         ),
         if (record['digestTranslated'] == true)
           Text(
-            '中文翻译：Google Translate · 本机处理',
+            tr('中文翻译：Google Translate · 本机处理'),
             style: Theme.of(context).textTheme.bodySmall,
           ),
       ],
@@ -370,7 +374,7 @@ class _HistoryDetailState extends State<HistoryDetail> {
   Widget build(BuildContext context) {
     final active = !['idle', 'ended'].contains(live['phase']);
     return Scaffold(
-      appBar: AppBar(title: Text(record['title'] as String? ?? '历史录音')),
+      appBar: AppBar(title: Text(record['title'] as String? ?? tr('历史录音'))),
       body: DisplayFeatureSubScreen(
         anchorPoint: Offset(MediaQuery.sizeOf(context).width / 4, 0),
         child: SafeArea(
@@ -394,13 +398,13 @@ class _HistoryDetailState extends State<HistoryDetail> {
                         children: [
                           Expanded(
                             child: Text(
-                              '${live['phase'] == 'paused' ? '当前录音已暂停' : '后台录音与翻译继续'} · ${duration(live['durationMs'])}',
+                              '${live['phase'] == 'paused' ? tr('当前录音已暂停') : tr('后台录音与翻译继续')} · ${duration(live['durationMs'])}',
                               style: const TextStyle(fontSize: 12),
                             ),
                           ),
                           TextButton(
                             onPressed: () => Navigator.pop(context, true),
-                            child: const Text('返回当前录音'),
+                            child: Text(tr('返回当前录音')),
                           ),
                         ],
                       ),
@@ -409,9 +413,9 @@ class _HistoryDetailState extends State<HistoryDetail> {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: Align(
-                    alignment: Alignment.centerLeft,
+                    alignment: AlignmentDirectional.centerStart,
                     child: Text(
-                      '历史录音 · ${duration(record['durationMs'])}',
+                      '${tr('历史录音')} · ${duration(record['durationMs'])}',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ),

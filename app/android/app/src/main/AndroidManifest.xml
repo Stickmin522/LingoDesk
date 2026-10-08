@@ -7,15 +7,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
-    <application android:label="听译台" android:name="${applicationName}" android:icon="@drawable/desk_launcher" android:allowBackup="false" android:networkSecurityConfig="@xml/network_security" android:allowAudioPlaybackCapture="false">
+    <application android:label="@string/app_name" android:name="${applicationName}" android:icon="@drawable/desk_launcher" android:allowBackup="false" android:supportsRtl="true" android:networkSecurityConfig="@xml/network_security" android:allowAudioPlaybackCapture="false">
         <activity android:name="com.lecsync.desk.MainActivity" android:exported="true" android:launchMode="singleTop" android:theme="@style/LaunchTheme" android:resizeableActivity="true" android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode" android:hardwareAccelerated="true" android:windowSoftInputMode="adjustResize">
             <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme" />
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>
-        <service android:name="com.lecsync.desk.SessionService" android:exported="false" android:stopWithTask="false" android:foregroundServiceType="microphone|mediaProjection|specialUse">
-            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User enabled floating live captions with immediate controls while using other apps" />
+        <service android:name="com.lecsync.desk.SessionService" android:exported="false" android:stopWithTask="false" android:foregroundServiceType="microphone|mediaProjection">
         </service>
         <meta-data android:name="flutterEmbedding" android:value="2" />
     </application>

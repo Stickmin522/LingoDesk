@@ -3,8 +3,13 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/services.dart';
+
+import 'languages.dart';
+export 'languages.dart';
 
 part 'session_panels.dart';
 
@@ -41,19 +46,20 @@ String duration(dynamic value) {
 
 String phaseLabel(String phase) =>
     {
-      'idle': '准备就绪',
-      'connecting': '正在连接',
-      'recording': '正在聆听',
-      'pausing': '正在暂停',
-      'paused': '录音已暂停',
-      'stopping': '正在保存',
-      'ended': '已保存',
+      'idle': tr('准备就绪'),
+      'connecting': tr('正在连接'),
+      'recording': tr('正在聆听'),
+      'pausing': tr('正在暂停'),
+      'paused': tr('录音已暂停'),
+      'stopping': tr('正在保存'),
+      'ended': tr('已保存'),
     }[phase] ??
-    '准备就绪';
+    tr('准备就绪');
 const defaults = <String, dynamic>{
   'hasKey': false,
   'keyHint': '',
   'pair': 'ja-zh',
+  'uiLanguage': 'system',
   'source': 'mic',
   'speakers': true,
   'digest': true,
@@ -72,11 +78,15 @@ class DeskApp extends StatefulWidget {
   State<DeskApp> createState() => _DeskAppState();
 }
 
-class _DeskAppState extends State<DeskApp> {
+class _DeskAppState extends State<DeskApp> with WidgetsBindingObserver {
   Map<String, dynamic> settings = {...defaults};
+  int loadGeneration = 0;
   Future<void> load() async {
     try {
+      final generation = ++loadGeneration;
       final value = await PlatformDesk.call('settings');
+      if (generation != loadGeneration || !mounted) return;
+      await AppStrings.load(value['effectiveLocale'] as String? ?? 'en');
       if (mounted) {
         setState(
           () => settings = {
@@ -91,7 +101,24 @@ class _DeskAppState extends State<DeskApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     load();
+  }
+
+  @override
+  void didChangeLocales(List<Locale>? locales) {
+    load();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) load();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   ThemeData theme(Brightness brightness) {
@@ -165,7 +192,14 @@ class _DeskAppState extends State<DeskApp> {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: '听译台',
+    title: tr('听译台'),
+    locale: AppStrings.locale,
+    supportedLocales: [AppStrings.locale],
+    localizationsDelegates: GlobalMaterialLocalizations.delegates,
+    builder: (context, child) => Directionality(
+      textDirection: AppStrings.rtl ? TextDirection.rtl : TextDirection.ltr,
+      child: child!,
+    ),
     debugShowCheckedModeBanner: false,
     theme: theme(Brightness.light),
     darkTheme: theme(Brightness.dark),
@@ -196,7 +230,7 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
   };
   List<dynamic> history = [];
   StreamSubscription<dynamic>? subscription;
-  final title = TextEditingController(text: '我的听译记录');
+  final title = TextEditingController();
   int page = 0;
   bool actionBusy = false;
   String lastError = '';
@@ -228,7 +262,15 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
   void showError(Object e) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      SnackBar(
+        content: Text(
+          tr(
+            e is PlatformException
+                ? (e.message ?? tr('操作失败'))
+                : e.toString().replaceFirst('Exception: ', ''),
+          ),
+        ),
+      ),
     );
   }
 
@@ -280,9 +322,11 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
     children: [
       Icon(icon, size: 20),
       const SizedBox(width: 10),
-      Text(
-        text,
-        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
+      Expanded(
+        child: Text(
+          text,
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
+        ),
       ),
     ],
   );
@@ -294,41 +338,79 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            iconTitle(Icons.tune_rounded, '录音设置'),
+            iconTitle(Icons.tune_rounded, tr('录音设置')),
             const SizedBox(height: 20),
             TextField(
               controller: title,
               enabled: !active,
-              decoration: const InputDecoration(
-                labelText: '记录名称',
-                prefixIcon: Icon(Icons.edit_note_rounded),
+              decoration: InputDecoration(
+                labelText: tr('记录名称'),
+                hintText: tr('我的听译记录'),
+                prefixIcon: const Icon(Icons.edit_note_rounded),
               ),
             ),
             const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              isExpanded: true,
-              initialValue: widget.settings['pair'] as String,
-              decoration: const InputDecoration(
-                labelText: '双向翻译',
-                prefixIcon: Icon(Icons.translate_rounded),
-              ),
-              items: const [
-                DropdownMenuItem(value: 'ja-zh', child: Text('日本語 ⇄ 中文')),
-                DropdownMenuItem(value: 'en-zh', child: Text('English ⇄ 中文')),
+            Row(
+              children: [
+                Expanded(
+                  child: LanguageField(
+                    key: const ValueKey('language-left'),
+                    value: AppStrings.pair(widget.settings['pair'])[0],
+                    label: tr('语言一'),
+                    exclude: AppStrings.pair(widget.settings['pair'])[1],
+                    onChanged: active
+                        ? null
+                        : (v) => action(
+                            () => save({
+                              'pair':
+                                  '$v-${AppStrings.pair(widget.settings['pair'])[1]}',
+                            }),
+                          ),
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  child: Icon(Icons.sync_alt_rounded, size: 20),
+                ),
+                Expanded(
+                  child: LanguageField(
+                    key: const ValueKey('language-right'),
+                    value: AppStrings.pair(widget.settings['pair'])[1],
+                    label: tr('语言二'),
+                    exclude: AppStrings.pair(widget.settings['pair'])[0],
+                    onChanged: active
+                        ? null
+                        : (v) => action(
+                            () => save({
+                              'pair':
+                                  '${AppStrings.pair(widget.settings['pair'])[0]}-$v',
+                            }),
+                          ),
+                  ),
+                ),
               ],
-              onChanged: active ? null : (v) => action(() => save({'pair': v})),
             ),
+            const SizedBox(height: 8),
+            Text(tr('自动双向翻译'), style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(height: 18),
-            const Text('采集音源', style: TextStyle(fontWeight: FontWeight.w600)),
+            Text(
+              tr('采集音源'),
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
             const SizedBox(height: 8),
             ...[
-              ('mic', Icons.mic_rounded, '麦克风', '录制你身边的声音'),
-              ('system', Icons.volume_up_rounded, '系统内部音频', '捕获允许录制的媒体声音'),
+              ('mic', Icons.mic_rounded, tr('麦克风'), tr('录制你身边的声音')),
+              (
+                'system',
+                Icons.volume_up_rounded,
+                tr('系统内部音频'),
+                tr('捕获允许录制的媒体声音'),
+              ),
               (
                 'both',
                 Icons.multitrack_audio_rounded,
-                '麦克风 + 系统',
-                '同时录制，并自动混音',
+                tr('麦克风 + 系统'),
+                tr('同时录制，并自动混音'),
               ),
             ].map(
               (x) => Padding(
@@ -379,8 +461,8 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
             const SizedBox(height: 8),
             SwitchListTile.adaptive(
               contentPadding: EdgeInsets.zero,
-              title: const Text('悬浮字幕'),
-              subtitle: const Text('记住开启状态；关闭浮窗不停止录音'),
+              title: Text(tr('悬浮字幕')),
+              subtitle: Text(tr('记住开启状态；关闭浮窗不停止录音')),
               value: widget.settings['overlay'] == true,
               onChanged: (v) => action(() async {
                 await PlatformDesk.call('overlay', {'enabled': v});
@@ -390,11 +472,11 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
               }),
             ),
             if (widget.settings['source'] != 'mic')
-              const Padding(
-                padding: EdgeInsets.only(top: 8),
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
                 child: Text(
-                  '内录需系统授权。通话及禁止音频捕获的应用可能无声。',
-                  style: TextStyle(fontSize: 12, height: 1.6),
+                  tr('内录需系统授权。通话及禁止音频捕获的应用可能无声。'),
+                  style: const TextStyle(fontSize: 12, height: 1.6),
                 ),
               ),
           ],
@@ -416,10 +498,14 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
             onPressed: busy
                 ? null
                 : () => action(() async {
-                    await PlatformDesk.call('start', {'title': title.text});
+                    await PlatformDesk.call('start', {
+                      'title': title.text.trim().isEmpty
+                          ? tr('我的听译记录')
+                          : title.text,
+                    });
                   }),
             icon: const Icon(Icons.mic_rounded),
-            label: const Text('开始录音'),
+            label: Text(tr('开始录音')),
           ),
         if (p == 'recording')
           FilledButton.icon(
@@ -429,7 +515,7 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
                     await PlatformDesk.call('pause');
                   }),
             icon: const Icon(Icons.pause_rounded),
-            label: const Text('暂停录音'),
+            label: Text(tr('暂停录音')),
           ),
         if (p == 'paused')
           FilledButton.icon(
@@ -439,7 +525,7 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
                     await PlatformDesk.call('resume');
                   }),
             icon: const Icon(Icons.play_arrow_rounded),
-            label: const Text('继续录音'),
+            label: Text(tr('继续录音')),
           ),
         if (active)
           OutlinedButton.icon(
@@ -449,7 +535,7 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
                     await PlatformDesk.call('stop');
                   }),
             icon: const Icon(Icons.stop_rounded),
-            label: const Text('停止并保存'),
+            label: Text(tr('停止并保存')),
           ),
         if (busy)
           const SizedBox(
@@ -464,7 +550,7 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
             label: Text(
               widget.settings['hasKey'] == true
                   ? widget.settings['keyHint'] as String
-                  : '连接设置',
+                  : tr('连接设置'),
             ),
           ),
       ],
@@ -481,7 +567,7 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
       await widget.reload();
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('悬浮字幕已记住，返回桌面后自动显示')));
+            .showSnackBar(SnackBar(content: Text(tr('悬浮字幕已记住，返回桌面后自动显示'))));
       }
     }),
     onError: showError,
@@ -546,7 +632,7 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: Text(
-                record['warning'] as String,
+                tr(record['warning'] as String),
                 style: TextStyle(
                   fontSize: 12,
                   color: Theme.of(context).colorScheme.tertiary,
@@ -586,7 +672,7 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
             children: [
               Expanded(
                 child: Text(
-                  '让声音，成为文字。',
+                  tr('让声音，成为文字。'),
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
@@ -594,7 +680,7 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
                 ),
               ),
               IconButton(
-                tooltip: '录音设置',
+                tooltip: tr('录音设置'),
                 onPressed: () => showModalBottomSheet<void>(
                   context: context,
                   isScrollControlled: true,
@@ -619,7 +705,7 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
               children: [
                 Expanded(
                   child: Text(
-                    '${widget.settings['pair'] == 'ja-zh' ? '日中' : '中英'}双向 · ${{'mic': '麦克风', 'system': '系统内部音频', 'both': '麦克风 + 系统'}[widget.settings['source']]}',
+                    '${AppStrings.pair(widget.settings['pair']).map(AppStrings.name).join(' ⇄ ')} · ${{'mic': tr('麦克风'), 'system': tr('系统内部音频'), 'both': tr('麦克风 + 系统')}[widget.settings['source']]}',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
@@ -638,25 +724,25 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
     children: [
       Row(
         children: [
-          const Expanded(
+          Expanded(
             child: Text(
-              '本机记录',
-              style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700),
+              tr('本机记录'),
+              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700),
             ),
           ),
           IconButton(
             onPressed: refreshHistory,
-            tooltip: '刷新',
+            tooltip: tr('刷新'),
             icon: const Icon(Icons.refresh_rounded),
           ),
         ],
       ),
       const SizedBox(height: 8),
-      const Text('录音与字幕保存在此设备，导出后可自行备份。'),
+      Text(tr('录音与字幕保存在此设备，导出后可自行备份。')),
       const SizedBox(height: 20),
       Expanded(
         child: history.isEmpty
-            ? const Center(child: Text('还没有录音记录'))
+            ? Center(child: Text(tr('还没有录音记录')))
             : ListView.separated(
                 itemCount: history.length,
                 separatorBuilder: (_, _) => const SizedBox(height: 10),
@@ -683,7 +769,7 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                       subtitle: Text(
-                        '${date.month}/${date.day} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')} · ${duration(r['durationMs'])} · ${(r['segments'] as List).length} 段字幕',
+                        '${date.month}/${date.day} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')} · ${duration(r['durationMs'])} · ${(r['segments'] as List).length} ${tr('段字幕')}',
                       ),
                       onTap: () async {
                         final current = await Navigator.of(context).push<bool>(
@@ -700,23 +786,23 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
                         }
                       },
                       trailing: IconButton(
-                        tooltip: '删除记录',
+                        tooltip: tr('删除记录'),
                         icon: const Icon(Icons.delete_outline_rounded),
                         onPressed: () => action(() async {
                           final yes = await showDialog<bool>(
                             context: context,
                             builder: (context) => AlertDialog(
-                              title: const Text('删除这条记录？'),
-                              content: const Text('本机录音与字幕会一并删除。'),
+                              title: Text(tr('删除这条记录？')),
+                              content: Text(tr('本机录音与字幕会一并删除。')),
                               actions: [
                                 TextButton(
                                   onPressed: () =>
                                       Navigator.pop(context, false),
-                                  child: const Text('取消'),
+                                  child: Text(tr('取消')),
                                 ),
                                 FilledButton(
                                   onPressed: () => Navigator.pop(context, true),
-                                  child: const Text('删除'),
+                                  child: Text(tr('删除')),
                                 ),
                               ],
                             ),
@@ -781,19 +867,19 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
                     padding: EdgeInsets.symmetric(vertical: 24),
                     child: Icon(Icons.graphic_eq_rounded, size: 34),
                   ),
-                  destinations: const [
+                  destinations: [
                     NavigationRailDestination(
-                      icon: Icon(Icons.subtitles_outlined),
-                      selectedIcon: Icon(Icons.subtitles_rounded),
-                      label: Text('听译'),
+                      icon: const Icon(Icons.subtitles_outlined),
+                      selectedIcon: const Icon(Icons.subtitles_rounded),
+                      label: Text(tr('听译')),
                     ),
                     NavigationRailDestination(
-                      icon: Icon(Icons.history_rounded),
-                      label: Text('记录'),
+                      icon: const Icon(Icons.history_rounded),
+                      label: Text(tr('记录')),
                     ),
                     NavigationRailDestination(
-                      icon: Icon(Icons.tune_rounded),
-                      label: Text('设置'),
+                      icon: const Icon(Icons.tune_rounded),
+                      label: Text(tr('设置')),
                     ),
                   ],
                 ),
@@ -807,19 +893,19 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
         ? NavigationBar(
             selectedIndex: page,
             onDestinationSelected: (v) => setState(() => page = v),
-            destinations: const [
+            destinations: [
               NavigationDestination(
-                icon: Icon(Icons.subtitles_outlined),
-                selectedIcon: Icon(Icons.subtitles_rounded),
-                label: '听译',
+                icon: const Icon(Icons.subtitles_outlined),
+                selectedIcon: const Icon(Icons.subtitles_rounded),
+                label: tr('听译'),
               ),
               NavigationDestination(
-                icon: Icon(Icons.history_rounded),
-                label: '记录',
+                icon: const Icon(Icons.history_rounded),
+                label: tr('记录'),
               ),
               NavigationDestination(
-                icon: Icon(Icons.tune_rounded),
-                label: '设置',
+                icon: const Icon(Icons.tune_rounded),
+                label: tr('设置'),
               ),
             ],
           )
@@ -874,12 +960,12 @@ class _SettingsPageState extends State<SettingsPage> {
         constraints: const BoxConstraints(maxWidth: 720),
         child: ListView(
           children: [
-            const Text(
-              '连接与显示',
-              style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700),
+            Text(
+              tr('连接与显示'),
+              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
-            const Text('使用你的 LecSync API Key。音频按服务商实际用量计费。'),
+            Text(tr('使用你的 LecSync API Key。音频按服务商实际用量计费。')),
             const SizedBox(height: 24),
             Card(
               margin: EdgeInsets.zero,
@@ -888,9 +974,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'LecSync 连接',
-                      style: TextStyle(
+                    Text(
+                      tr('LecSync 连接'),
+                      style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
                       ),
@@ -905,11 +991,11 @@ class _SettingsPageState extends State<SettingsPage> {
                       decoration: InputDecoration(
                         labelText: 'API Key',
                         hintText: s['hasKey'] == true
-                            ? '已保存 ${s['keyHint']} · 输入新密钥替换'
-                            : '粘贴你的密钥',
+                            ? '${tr('已保存')} ${s['keyHint']} · ${tr('输入新密钥替换')}'
+                            : tr('粘贴你的密钥'),
                         prefixIcon: const Icon(Icons.key_rounded),
                         suffixIcon: IconButton(
-                          tooltip: hidden ? '显示密钥' : '隐藏密钥',
+                          tooltip: hidden ? tr('显示密钥') : tr('隐藏密钥'),
                           onPressed: () => setState(() => hidden = !hidden),
                           icon: Icon(
                             hidden
@@ -929,13 +1015,13 @@ class _SettingsPageState extends State<SettingsPage> {
                               ? null
                               : () => task(() async {
                                   if (keyField.text.trim().isEmpty) {
-                                    throw Exception('请填入新密钥');
+                                    throw Exception(tr('请填入新密钥'));
                                   }
                                   await widget.save({'apiKey': keyField.text});
                                   keyField.clear();
-                                  setState(() => result = '密钥已在手机本地加密保存');
+                                  setState(() => result = tr('密钥已在手机本地加密保存'));
                                 }),
-                          child: const Text('保存密钥'),
+                          child: Text(tr('保存密钥')),
                         ),
                         OutlinedButton(
                           onPressed: widget.active || busy
@@ -956,16 +1042,16 @@ class _SettingsPageState extends State<SettingsPage> {
                                     );
                                   }
                                 }),
-                          child: const Text('测试连接'),
+                          child: Text(tr('测试连接')),
                         ),
                         TextButton(
                           onPressed: widget.active || busy
                               ? null
                               : () => task(() async {
                                   await widget.save({'apiKey': ''});
-                                  setState(() => result = '已删除本机密钥');
+                                  setState(() => result = tr('已删除本机密钥'));
                                 }),
-                          child: const Text('删除密钥'),
+                          child: Text(tr('删除密钥')),
                         ),
                       ],
                     ),
@@ -977,18 +1063,20 @@ class _SettingsPageState extends State<SettingsPage> {
                     if (result.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 12),
-                        child: Text(result),
+                        child: Text(tr(result)),
                       ),
                     const SizedBox(height: 14),
-                    const Text(
-                      '密钥使用 Android Keystore 加密。本机录音不自动同步到网页账号；测试连接不采集或发送音频。',
-                      style: TextStyle(fontSize: 12, height: 1.6),
+                    Text(
+                      tr(
+                        '密钥使用 Android Keystore 加密。本机录音不自动同步到网页账号；测试连接不采集或发送音频。',
+                      ),
+                      style: const TextStyle(fontSize: 12, height: 1.6),
                     ),
                     const Divider(height: 32),
                     for (final item in [
-                      ('speakers', '区分说话人', '标注不同说话人的字幕'),
-                      ('digest', '实时纪要', '整理话题与要点'),
-                      ('enhance', '译文精修', '根据上下文更新译文'),
+                      ('speakers', tr('区分说话人'), tr('标注不同说话人的字幕')),
+                      ('digest', tr('实时纪要'), tr('整理话题与要点')),
+                      ('enhance', tr('译文精修'), tr('根据上下文更新译文')),
                     ])
                       SwitchListTile.adaptive(
                         contentPadding: EdgeInsets.zero,
@@ -1005,7 +1093,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         if (mounted) setState(() => devices = r as List);
                       }),
                       icon: const Icon(Icons.headset_mic_rounded),
-                      label: const Text('刷新输入设备'),
+                      label: Text(tr('刷新输入设备')),
                     ),
                     if (devices.isNotEmpty)
                       DropdownButtonFormField<String>(
@@ -1013,11 +1101,11 @@ class _SettingsPageState extends State<SettingsPage> {
                         initialValue: devices.any((d) => d['id'] == s['device'])
                             ? s['device'] as String
                             : 'default',
-                        decoration: const InputDecoration(labelText: '麦克风设备'),
+                        decoration: InputDecoration(labelText: tr('麦克风设备')),
                         items: [
-                          const DropdownMenuItem(
+                          DropdownMenuItem(
                             value: 'default',
-                            child: Text('系统默认麦克风'),
+                            child: Text(tr('系统默认麦克风')),
                           ),
                           ...devices.map(
                             (d) => DropdownMenuItem(
@@ -1045,27 +1133,49 @@ class _SettingsPageState extends State<SettingsPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      '阅读体验',
-                      style: TextStyle(
+                    Text(
+                      tr('阅读体验'),
+                      style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 16),
+                    LanguageField(
+                      value: s['uiLanguage'] as String? ?? 'system',
+                      label: tr('界面语言'),
+                      followSystem: true,
+                      onChanged: (v) =>
+                          task(() => widget.save({'uiLanguage': v})),
+                    ),
+                    if (s['uiLanguage'] != null &&
+                        s['uiLanguage'] != 'system' &&
+                        s['effectiveLocale'] == 'en' &&
+                        s['uiLanguage'] != 'en')
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          tr('系统不支持此界面语言，将显示英语。'),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                    const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
                       isExpanded: true,
                       initialValue: s['theme'] as String,
-                      decoration: const InputDecoration(labelText: '外观'),
-                      items: const [
-                        DropdownMenuItem(value: 'system', child: Text('跟随系统')),
-                        DropdownMenuItem(value: 'light', child: Text('浅色')),
-                        DropdownMenuItem(value: 'dark', child: Text('深色')),
+                      decoration: InputDecoration(labelText: tr('外观')),
+                      items: [
+                        DropdownMenuItem(
+                          value: 'system',
+                          child: Text(tr('跟随系统')),
+                        ),
+                        DropdownMenuItem(value: 'light', child: Text(tr('浅色'))),
+                        DropdownMenuItem(value: 'dark', child: Text(tr('深色'))),
                       ],
                       onChanged: (v) => task(() => widget.save({'theme': v})),
                     ),
                     const SizedBox(height: 16),
-                    Text('字幕字号 · ${s['fontSize']}'),
+                    Text('${tr('字幕字号')} · ${s['fontSize']}'),
                     Slider(
                       value: (s['fontSize'] as num).toDouble(),
                       min: 14,
@@ -1074,18 +1184,17 @@ class _SettingsPageState extends State<SettingsPage> {
                       onChanged: (v) =>
                           task(() => widget.save({'fontSize': v.round()})),
                     ),
-                    const Text('この内容を説明します。', style: TextStyle(fontSize: 18)),
                     Text(
-                      '接下来说明这部分内容。',
+                      tr('接下来说明这部分内容。'),
                       style: TextStyle(
                         fontSize: (s['fontSize'] as num).toDouble(),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 14),
-                    const Text(
-                      '主界面与悬浮窗各自控制跟随。向上翻阅后，点击“回到底部并跟随”恢复更新。',
-                      style: TextStyle(fontSize: 12, height: 1.6),
+                    Text(
+                      tr('主界面与悬浮窗各自控制跟随。向上翻阅后，点击“回到底部并跟随”恢复更新。'),
+                      style: const TextStyle(fontSize: 12, height: 1.6),
                     ),
                   ],
                 ),
@@ -1093,7 +1202,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             const SizedBox(height: 24),
             const Text(
-              '听译台 1.1 · Flutter + Rust\nAndroid 10–17 · ARM64',
+              'LingoDesk 1.2.0 · Android 10–17 · ARM64',
               style: TextStyle(fontSize: 12, height: 1.8),
             ),
           ],
@@ -1177,8 +1286,8 @@ class _CaptionFeedState extends State<CaptionFeed> {
                 const SizedBox(height: 16),
                 Text(
                   widget.record['phase'] == 'recording'
-                      ? '正在聆听…'
-                      : '听到的内容，在这里出现',
+                      ? tr('正在聆听…')
+                      : tr('听到的内容，在这里出现'),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: widget.floating ? 16 : 20,
@@ -1186,12 +1295,12 @@ class _CaptionFeedState extends State<CaptionFeed> {
                   ),
                 ),
                 if (!widget.floating)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 10),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
                     child: Text(
-                      '填写 API Key，选择音源，然后开始录音。',
+                      tr('填写 API Key，选择音源，然后开始录音。'),
                       textAlign: TextAlign.center,
-                      style: TextStyle(height: 1.6),
+                      style: const TextStyle(height: 1.6),
                     ),
                   ),
               ],
@@ -1249,8 +1358,8 @@ class _CaptionFeedState extends State<CaptionFeed> {
                     children: [
                       Text(
                         partial
-                            ? '识别中…'
-                            : '${duration(s['startMs'])}${(s['speaker'] as String? ?? '').isNotEmpty ? ' · 说话人 ${s['speaker']}' : ''}${s['enhanced'] == true ? ' · 已精修' : ''}',
+                            ? tr('识别中…')
+                            : '${duration(s['startMs'])}${(s['speaker'] as String? ?? '').isNotEmpty ? ' · ${tr('说话人')} ${s['speaker']}' : ''}${s['enhanced'] == true ? ' · ${tr('已精修')}' : ''}',
                         style: TextStyle(
                           fontSize: 11,
                           color: Theme.of(context).colorScheme.outline,
@@ -1261,6 +1370,7 @@ class _CaptionFeedState extends State<CaptionFeed> {
                           (s['text'] as String? ?? '').isNotEmpty)
                         SelectableText(
                           s['text'] as String,
+                          textDirection: contentDirection(s['text'] as String),
                           style: TextStyle(
                             fontSize: font - 2,
                             height: 1.6,
@@ -1273,6 +1383,9 @@ class _CaptionFeedState extends State<CaptionFeed> {
                           (s['translation'] as String? ?? '').isNotEmpty)
                         SelectableText(
                           s['translation'] as String,
+                          textDirection: contentDirection(
+                            s['translation'] as String,
+                          ),
                           style: TextStyle(
                             fontSize: font,
                             height: 1.6,
@@ -1294,7 +1407,7 @@ class _CaptionFeedState extends State<CaptionFeed> {
               bottom();
             },
             icon: const Icon(Icons.south_rounded, size: 16),
-            label: const Text('回到底部并跟随'),
+            label: Text(tr('回到底部并跟随')),
           ),
       ],
     );
@@ -1392,122 +1505,126 @@ class _FloatingDeskState extends State<FloatingDesk>
   @override
   Widget build(BuildContext context) {
     final phase = record['phase'] as String? ?? 'idle';
-    return Listener(
-      behavior: HitTestBehavior.translucent,
-      onPointerDown: (event) {
-        pointers.add(event.pointer);
-        showControls();
-      },
-      onPointerUp: (event) {
-        pointers.remove(event.pointer);
-        showControls();
-      },
-      onPointerCancel: (event) {
-        pointers.remove(event.pointer);
-        showControls();
-      },
-      child: Material(
-        color: Colors.transparent,
-        child: Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: Theme.of(context).colorScheme.outlineVariant,
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (event) {
+          pointers.add(event.pointer);
+          showControls();
+        },
+        onPointerUp: (event) {
+          pointers.remove(event.pointer);
+          showControls();
+        },
+        onPointerCancel: (event) {
+          pointers.remove(event.pointer);
+          showControls();
+        },
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
             ),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            children: [
-              ClipRect(
-                child: AnimatedSize(
-                  duration: const Duration(milliseconds: 180),
-                  alignment: Alignment.topCenter,
-                  child: controlsVisible
-                      ? Column(
-                          key: const ValueKey('floating-controls'),
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                left: 12,
-                                right: 2,
-                                top: 2,
-                                bottom: 2,
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(
-                                    Icons.drag_indicator_rounded,
-                                    size: 16,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      '听译台 · ${phaseLabel(phase)}',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                ClipRect(
+                  child: AnimatedSize(
+                    duration: const Duration(milliseconds: 180),
+                    alignment: Alignment.topCenter,
+                    child: controlsVisible
+                        ? Column(
+                            key: const ValueKey('floating-controls'),
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  left: 12,
+                                  right: 2,
+                                  top: 2,
+                                  bottom: 2,
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.drag_indicator_rounded,
+                                      size: 16,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        '${tr('听译台')} · ${phaseLabel(phase)}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  IconButton(
-                                    visualDensity: VisualDensity.compact,
-                                    tooltip: '回到应用',
-                                    onPressed: () => PlatformDesk.call('open'),
-                                    icon: const Icon(
-                                      Icons.open_in_new_rounded,
-                                      size: 17,
+                                    IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      tooltip: tr('回到应用'),
+                                      onPressed: () =>
+                                          PlatformDesk.call('open'),
+                                      icon: const Icon(
+                                        Icons.open_in_new_rounded,
+                                        size: 17,
+                                      ),
                                     ),
-                                  ),
-                                  IconButton(
-                                    visualDensity: VisualDensity.compact,
-                                    tooltip: '关闭悬浮字幕',
-                                    onPressed: () =>
-                                        PlatformDesk.call('closeOverlay'),
-                                    icon: const Icon(
-                                      Icons.close_rounded,
-                                      size: 18,
+                                    IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      tooltip: tr('关闭悬浮字幕'),
+                                      onPressed: () =>
+                                          PlatformDesk.call('closeOverlay'),
+                                      icon: const Icon(
+                                        Icons.close_rounded,
+                                        size: 18,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                            const Divider(height: 1),
-                          ],
-                        )
-                      : const SizedBox(width: double.infinity, height: 0),
+                              const Divider(height: 1),
+                            ],
+                          )
+                        : const SizedBox(width: double.infinity, height: 0),
+                  ),
                 ),
-              ),
-              Expanded(
-                child: CaptionFeed(
-                  record: record,
-                  settings: widget.settings,
-                  floating: true,
+                Expanded(
+                  child: CaptionFeed(
+                    record: record,
+                    settings: widget.settings,
+                    floating: true,
+                  ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(left: 12, right: 5, bottom: 3),
-                child: Row(
-                  children: [
-                    Text(
-                      duration(record['durationMs']),
-                      style: const TextStyle(fontSize: 10),
-                    ),
-                    const Spacer(),
-                    ExcludeSemantics(
-                      child: Icon(
-                        Icons.south_east_rounded,
-                        size: 18,
-                        color: Theme.of(context).colorScheme.outline,
+                Padding(
+                  padding: const EdgeInsets.only(left: 12, right: 5, bottom: 3),
+                  child: Row(
+                    children: [
+                      Text(
+                        duration(record['durationMs']),
+                        style: const TextStyle(fontSize: 10),
                       ),
-                    ),
-                  ],
+                      const Spacer(),
+                      ExcludeSemantics(
+                        child: Icon(
+                          Icons.south_east_rounded,
+                          size: 18,
+                          color: Theme.of(context).colorScheme.outline,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

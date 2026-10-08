@@ -31,6 +31,8 @@ object SettingsStore {
         }.doFinal(bytes.copyOfRange(12, bytes.size)), Charsets.UTF_8)
     }
     fun save(c: Context, input: JSONObject) {
+        if(input.has("pair")) AppLanguages.validatePair(c,input.getString("pair"))
+        if(input.has("uiLanguage")) require(input.getString("uiLanguage")=="system" || input.getString("uiLanguage") in AppLanguages.codes(c)) { "不支持的语言" }
         val p = prefs(c).edit()
         if (input.has("apiKey")) {
             val text = input.optString("apiKey").trim()
@@ -39,7 +41,7 @@ object SettingsStore {
                 p.putString("key", Base64.encodeToString(cipher.iv + cipher.doFinal(text.toByteArray(Charsets.UTF_8)), Base64.NO_WRAP))
             }
         }
-        for (name in listOf("pair", "source", "captionMode", "theme", "device")) if (input.has(name)) p.putString(name, input.optString(name))
+        for (name in listOf("pair", "source", "captionMode", "theme", "device", "uiLanguage")) if (input.has(name)) p.putString(name, input.optString(name))
         for (name in listOf("speakers", "digest", "enhance", "overlay")) if (input.has(name)) p.putBoolean(name, input.optBoolean(name))
         for(name in listOf("overlayX","overlayY","overlayWidth","overlayHeight")) if(input.has(name)) p.putFloat(name,input.optDouble(name).toFloat())
         if (input.has("fontSize")) p.putInt("fontSize", input.optInt("fontSize", 20).coerceIn(14, 32))
@@ -53,7 +55,10 @@ object SettingsStore {
             edit.commit()
         }
         val key = runCatching { readKey(c) }.getOrDefault("")
-        return JSONObject().put("hasKey", key.isNotEmpty()).put("keyHint", if (key.isNotEmpty()) "•••• " + key.takeLast(4) else "")
+        return JSONObject().put("uiLanguage",p.getString("uiLanguage","system"))
+            .put("effectiveLocale",AppLanguages.resolve(c,p.getString("uiLanguage","system")?:"system"))
+            .put("systemLanguages",org.json.JSONArray(AppLanguages.systemLanguages().toList()))
+            .put("hasKey", key.isNotEmpty()).put("keyHint", if (key.isNotEmpty()) "•••• " + key.takeLast(4) else "")
             .put("pair", p.getString("pair", "ja-zh")).put("source", p.getString("source", "mic"))
             .put("captionMode", p.getString("captionMode", "both")).put("theme", p.getString("theme", "system"))
             .put("device", p.getString("device", "default")).put("fontSize", p.getInt("fontSize", 20))

@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION, CODE = re.search(r"^version:\s*([^+\s]+)\+(\d+)", (ROOT / "app/pubspec.yaml").read_text(encoding="utf-8"), re.M).groups()
-APK = ROOT / f"outputs/听译台-{VERSION}-arm64.apk"
+APK = ROOT / f"outputs/lingodesk-{VERSION}-arm64.apk"
 options = argparse.ArgumentParser()
 options.add_argument("--certificate-sha256", default="51bf5e9d34a840c7734b4e428046786113368e1f7460db335f174a8fa8e555ac", help="Expected signing certificate; forks must pass their own certificate fingerprint.")
 options.add_argument("--application-id", default="com.lecsync.desk")

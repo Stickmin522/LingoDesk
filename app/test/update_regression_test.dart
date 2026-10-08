@@ -35,13 +35,18 @@ final saved = <String, dynamic>{
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final calls = <String>[];
-  setUp(() {
+  setUp(() async {
+    await AppStrings.load('zh');
     calls.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(PlatformDesk.channel, (call) async {
           calls.add(call.method);
           if (call.method == 'settings') {
-            return jsonEncode({...defaults, 'hasKey': true});
+            return jsonEncode({
+              ...defaults,
+              'effectiveLocale': 'zh',
+              'hasKey': true,
+            });
           }
           if (call.method == 'digest') {
             return jsonEncode({...saved, 'digestStatus': 'ready'});

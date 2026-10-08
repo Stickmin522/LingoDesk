@@ -1,4 +1,5 @@
 mod captions;
+mod languages;
 mod transport;
 use jni::{
     JNIEnv,
@@ -230,11 +231,7 @@ fn open(c: &Config) -> Result<Socket, String> {
     if c.api_key.trim().is_empty() {
         return Err("请先填写 LecSync API Key".into());
     }
-    let languages = if c.pair == "en-zh" {
-        json!(["en", "zh"])
-    } else {
-        json!(["ja", "zh"])
-    };
+    let languages = languages::parse_pair(&c.pair)?;
     let client = reqwest::blocking::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(15))
@@ -711,6 +708,7 @@ fn command(input: &str) -> Result<Value, String> {
         "start" => {
             let c: Config =
                 serde_json::from_value(req["config"].clone()).map_err(|_| "无效录音配置")?;
+            languages::parse_pair(&c.pair)?;
             let mut engine = ENGINE.lock().map_err(|_| "状态异常")?;
             if let Some(e) = engine.as_ref() {
                 if e.view.lock().map_err(|_| "状态异常")?.phase != "ended" {

@@ -26,6 +26,7 @@ object ChineseDigest {
         return view.optString("id")+":"+MessageDigest.getInstance("SHA-256").digest(raw.toByteArray()).joinToString(""){"%02x".format(it)}
     }
     @Synchronized fun decorate(context:Context,view:JSONObject,retry:Boolean=false):JSONObject {
+        if(!view.optString("pair","ja-zh").split("-").contains("zh"))return view.put("digestStatus","ready")
         val id=view.optString("id");val raw=view.optJSONArray("sections")?:JSONArray()
         if(id.isEmpty()||raw.length()==0)return view
         if(!retry && view.optJSONArray("chineseDigestSource")?.toString()==raw.toString() && (view.optJSONArray("chineseSections")?.length()?:0)>0){view.put("digestStatus","ready");return view}
@@ -48,8 +49,7 @@ object ChineseDigest {
         if(text.any{it in '\uac00'..'\ud7af'})return "ko"
         val han=text.count{it in '\u4e00'..'\u9fff'};val latin=text.count{it in 'A'..'Z'||it in 'a'..'z'}
         if(han>0&&han>=latin/2)return "zh"
-        if(latin>0)return "en"
-        return if(pair=="en-zh")"en" else "ja"
+        return pair.split("-").firstOrNull{it!="zh"}?:"zh"
     }
     private fun process(){
         while(true){
