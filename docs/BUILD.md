@@ -1,7 +1,5 @@
 # Build
 
-For Linux cloud development, see [CLOUD_SETUP.md](CLOUD_SETUP.md).
-
 [English](../README.md) · [简体中文](../README.zh-CN.md) · [日本語](../README.ja.md)
 
 ## Requirements
