@@ -228,5 +228,6 @@
   "音源采集失败": "audio avota kolekcija neizdevās",
   "音频写入失败，请检查存储空间": "audio ierakstīšana neizdevās, lūdzu, pārbaudiet krātuves vietu",
   "音频采集初始化失败": "audio uztveršanas inicializācija neizdevās",
-  "麦克风读取失败": "neizdevās nolasīt mikrofonu"
+  "麦克风读取失败": "neizdevās nolasīt mikrofonu",
+  "LecSync 控制台": "LecSync konsole"
 }

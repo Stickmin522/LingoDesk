@@ -58,6 +58,13 @@ class MainActivity : FlutterActivity() {
     fun exportRecord(input:JSONObject,result:MethodChannel.Result){if(pending!=null){result.error("busy","正在等待另一个操作",null);return};input.put("op","export").put("directory",SettingsStore.directory(this));val response=JSONObject(NativeCore.command(input.toString()));if(response.has("error")){result.error("export",response.optString("error"),null);return};pending=result;exportRequest=input;val format=input.optString("format","txt");startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(when(format){"wav"->"audio/wav";"json"->"application/json";"srt"->"application/x-subrip";else->"text/plain"}).putExtra(Intent.EXTRA_TITLE,response.getString("filename")),104)}
     fun playRecord(input:JSONObject){stopPlayback();val v=JSONObject(NativeCore.command(JSONObject().put("op","load").put("directory",SettingsStore.directory(this)).put("id",input.getString("id")).toString()));if(v.has("error"))error(v.optString("error"));player=MediaPlayer().apply{setDataSource(v.getString("audioPath"));setOnPreparedListener{it.start()};setOnCompletionListener{stopPlayback()};prepareAsync()}}
     fun stopPlayback(){player?.release();player=null}
+    fun openLecSyncConsole(){
+        val intent=Intent(Intent.ACTION_VIEW,Uri.parse("https://www.lecsync.com/dashboard/api"))
+            .addCategory(Intent.CATEGORY_BROWSABLE)
+        // Resolve the user's browser, rather than another app claiming this website.
+        intent.selector=Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_BROWSER)
+        startActivity(intent)
+    }
     companion object {@Volatile var visible=false}
 }
 

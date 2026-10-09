@@ -228,5 +228,6 @@
   "音源采集失败": "Audio source collection failed",
   "音频写入失败，请检查存储空间": "Audio writing failed, please check the storage space",
   "音频采集初始化失败": "Audio capture initialization failed",
-  "麦克风读取失败": "Microphone read failed"
+  "麦克风读取失败": "Microphone read failed",
+  "LecSync 控制台": "LecSync console"
 }

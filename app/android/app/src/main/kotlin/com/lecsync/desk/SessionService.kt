@@ -39,6 +39,8 @@ class SessionService : Service() {
     private var params:WindowManager.LayoutParams?=null
     private var overlayRoot:OverlayFrame?=null
     private var overlayDismissed=false
+    private var dockSide:OverlayDockSide?=null
+    private var expandedGeometry:IntArray?=null
     private var recordingTypes=0
     private var sessionActive=false
     private var stoppingProjection=false
@@ -131,7 +133,7 @@ class SessionService : Service() {
                 val view=FlutterView(this,FlutterTextureView(this).apply{isOpaque=false});view.attachToFlutterEngine(engine)
                 val root=OverlayFrame(this,this);root.addView(view,android.widget.FrameLayout.LayoutParams(-1,-1));overlayRoot=root;overlayView=view
                 val d=resources.displayMetrics.density;val prefs=SettingsStore.read(this)
-                params=WindowManager.LayoutParams((prefs.optDouble("overlayWidth",280.0)*d).toInt(),(prefs.optDouble("overlayHeight",180.0)*d).toInt(),WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,PixelFormat.TRANSLUCENT).apply{gravity=android.view.Gravity.TOP or android.view.Gravity.START;x=(prefs.optDouble("overlayX",12.0)*d).toInt();y=(prefs.optDouble("overlayY",90.0)*d).toInt()}
+                params=WindowManager.LayoutParams((prefs.optDouble("overlayWidth",280.0)*d).toInt(),(prefs.optDouble("overlayHeight",180.0)*d).toInt(),WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,PixelFormat.TRANSLUCENT).apply{gravity=android.view.Gravity.TOP or android.view.Gravity.LEFT;x=(prefs.optDouble("overlayX",12.0)*d).toInt();y=(prefs.optDouble("overlayY",90.0)*d).toInt()}
                 engine.dartExecutor.executeDartEntrypoint(DartExecutor.DartEntrypoint(loader.findAppBundlePath(),"overlayMain"))
             }
     }
@@ -139,7 +141,7 @@ class SessionService : Service() {
         if(overlayRoot?.isAttachedToWindow==true)return
         try{
             prepareOverlay()
-            val p=params?:return;setOverlayGeometry(p.x,p.y,p.width,p.height)
+            normalizeOverlayGeometry()
             getSystemService(WindowManager::class.java).addView(overlayRoot,params);overlayEngine?.lifecycleChannel?.appIsResumed();overlayBridge?.overlayShown()
         }catch(e:Exception){destroyOverlay();warn("悬浮窗显示失败，请检查悬浮窗权限")}
     }
@@ -152,6 +154,33 @@ class SessionService : Service() {
         }else android.graphics.Rect(0,0,resources.displayMetrics.widthPixels,resources.displayMetrics.heightPixels)
     }
     fun overlayGeometry():IntArray {val p=params?:return intArrayOf(0,0,0,0);return intArrayOf(p.x,p.y,p.width,p.height)}
+    private fun normalizeOverlayGeometry(){
+        if(params==null)return
+        val geometry=expandedGeometry?:overlayGeometry()
+        setOverlayGeometry(geometry[0],geometry[1],geometry[2],geometry[3])
+        if(dockSide!=null){expandedGeometry=overlayGeometry();applyDockedGeometry()}
+    }
+    private fun applyDockedGeometry(){
+        val p=params?:return;val side=dockSide?:return;val expanded=expandedGeometry?:return
+        val geometry=OverlayDock.tuckedGeometry(expanded,side,screenBounds().width(),(16*resources.displayMetrics.density).toInt())
+        p.x=geometry[0];p.y=geometry[1];p.width=geometry[2];p.height=geometry[3]
+        p.flags=p.flags or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+        overlayRoot?.setDocked(side)
+    }
+    internal fun dockOverlayAtEdge(){
+        if(dockSide!=null || params==null)return
+        val geometry=overlayGeometry()
+        val side=OverlayDock.sideFor(geometry,screenBounds().width(),(12*resources.displayMetrics.density).toInt())?:return
+        dockSide=side;expandedGeometry=geometry.copyOf();applyDockedGeometry();applyOverlayLayout()
+    }
+    fun restoreOverlayFromDock(){
+        val p=params?:return;val geometry=expandedGeometry?:return
+        dockSide=null;expandedGeometry=null
+        p.flags=p.flags and WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS.inv()
+        overlayRoot?.setDocked(null)
+        setOverlayGeometry(geometry[0],geometry[1],geometry[2],geometry[3])
+        applyOverlayLayout();rememberOverlayGeometry();overlayBridge?.overlayShown()
+    }
     fun setOverlayGeometry(x:Int,y:Int,width:Int,height:Int){
         val p=params?:return;val bounds=screenBounds();val d=resources.displayMetrics.density
         val maxW=maxOf(1,bounds.width()-(16*d).toInt());val maxH=maxOf(1,bounds.height()-(24*d).toInt())
@@ -159,12 +188,18 @@ class SessionService : Service() {
         p.x=x.coerceIn(0,maxOf(0,bounds.width()-p.width));p.y=y.coerceIn(0,maxOf(0,bounds.height()-p.height))
     }
     fun scaleOverlay(factor:Float){val p=params?:return;setOverlayGeometry(p.x,p.y,(p.width*factor).toInt(),(p.height*factor).toInt())}
+    internal fun resizeOverlay(origin:IntArray,corner:OverlayCorner,dx:Int,dy:Int){
+        val bounds=screenBounds();val d=resources.displayMetrics.density
+        val geometry=OverlayResize.resize(origin,corner,dx,dy,bounds.width(),bounds.height(),
+            (200*d).toInt(),(120*d).toInt(),maxOf(1,bounds.width()-(16*d).toInt()),maxOf(1,bounds.height()-(24*d).toInt()))
+        setOverlayGeometry(geometry[0],geometry[1],geometry[2],geometry[3])
+    }
     fun toggleOverlaySize(){val p=params?:return;val d=resources.displayMetrics.density;val expanded=min((560*d).toInt(),screenBounds().width()-(16*d).toInt());val large=p.width>=expanded*.8;setOverlayGeometry(p.x,p.y,if(large)(280*d).toInt()else expanded,((if(large)180 else 300)*d).toInt());rememberOverlayGeometry()}
     fun applyOverlayLayout(){if(overlayRoot?.isAttachedToWindow==true)getSystemService(WindowManager::class.java).updateViewLayout(overlayRoot,params)}
-    fun rememberOverlayGeometry(){val p=params?:return;val d=resources.displayMetrics.density;SettingsStore.save(this,JSONObject().put("overlayX",p.x/d).put("overlayY",p.y/d).put("overlayWidth",p.width/d).put("overlayHeight",p.height/d))}
+    fun rememberOverlayGeometry(){if(params==null)return;val geometry=expandedGeometry?:overlayGeometry();val d=resources.displayMetrics.density;SettingsStore.save(this,JSONObject().put("overlayX",geometry[0]/d).put("overlayY",geometry[1]/d).put("overlayWidth",geometry[2]/d).put("overlayHeight",geometry[3]/d))}
     private fun hideOverlay(){if(overlayRoot?.isAttachedToWindow==true){rememberOverlayGeometry();runCatching{getSystemService(WindowManager::class.java).removeView(overlayRoot)};overlayEngine?.lifecycleChannel?.appIsPaused()}}
-    private fun destroyOverlay(){hideOverlay();overlayView?.detachFromFlutterEngine();overlayView=null;overlayRoot=null;params=null;overlayBridge?.close();overlayBridge=null;overlayEngine?.destroy();overlayEngine=null}
-    override fun onConfigurationChanged(newConfig:Configuration){super.onConfigurationChanged(newConfig);val p=params;if(p!=null){setOverlayGeometry(p.x,p.y,p.width,p.height);applyOverlayLayout()}}
+    private fun destroyOverlay(){hideOverlay();overlayView?.detachFromFlutterEngine();overlayView=null;overlayRoot=null;params=null;dockSide=null;expandedGeometry=null;overlayBridge?.close();overlayBridge=null;overlayEngine?.destroy();overlayEngine=null}
+    override fun onConfigurationChanged(newConfig:Configuration){super.onConfigurationChanged(newConfig);if(params!=null){normalizeOverlayGeometry();applyOverlayLayout()}}
     override fun onTaskRemoved(rootIntent:Intent?){refreshOverlay();super.onTaskRemoved(rootIntent)}
     override fun onDestroy(){handler.removeCallbacksAndMessages(null);stopAudio();if(wake?.isHeld==true)wake?.release();NativeCore.command("{\"op\":\"stop\"}");releaseProjection();destroyOverlay();audioWorker.shutdown();instance=null;super.onDestroy()}
     companion object {@Volatile var instance:SessionService?=null}

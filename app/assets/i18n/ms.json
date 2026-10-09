@@ -228,5 +228,6 @@
   "音源采集失败": "Pengumpulan sumber audio gagal",
   "音频写入失败，请检查存储空间": "Penulisan audio gagal, sila semak ruang storan",
   "音频采集初始化失败": "Inisialisasi tangkapan audio gagal",
-  "麦克风读取失败": "Bacaan mikrofon gagal"
+  "麦克风读取失败": "Bacaan mikrofon gagal",
+  "LecSync 控制台": "Konsol LecSync"
 }

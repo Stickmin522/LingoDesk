@@ -228,5 +228,6 @@
   "音源采集失败": "Ses kaynağı toplanması başarısız oldu",
   "音频写入失败，请检查存储空间": "Ses yazma başarısız oldu, lütfen depolama alanını kontrol edin",
   "音频采集初始化失败": "Ses yakalamanın başlatılması başarısız oldu",
-  "麦克风读取失败": "Mikrofon okuma başarısız oldu"
+  "麦克风读取失败": "Mikrofon okuma başarısız oldu",
+  "LecSync 控制台": "LecSync konsolu"
 }

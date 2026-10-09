@@ -228,5 +228,6 @@
   "音源采集失败": "Falha na coleta da fonte de áudio",
   "音频写入失败，请检查存储空间": "Falha na gravação de áudio, verifique o espaço de armazenamento",
   "音频采集初始化失败": "Falha na inicialização da captura de áudio",
-  "麦克风读取失败": "Falha na leitura do microfone"
+  "麦克风读取失败": "Falha na leitura do microfone",
+  "LecSync 控制台": "Console LecSync"
 }

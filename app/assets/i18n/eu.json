@@ -228,5 +228,6 @@
   "音源采集失败": "Audio-iturburuaren bilketak huts egin du",
   "音频写入失败，请检查存储空间": "Audio-idazketa huts egin du, egiaztatu biltegiratze lekua",
   "音频采集初始化失败": "Audio-harrapaketaren hasierak huts egin du",
-  "麦克风读取失败": "Mikrofonoaren irakurketa huts egin du"
+  "麦克风读取失败": "Mikrofonoaren irakurketa huts egin du",
+  "LecSync 控制台": "LecSync kontsola"
 }

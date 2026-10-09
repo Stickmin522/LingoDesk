@@ -228,5 +228,6 @@
   "音源采集失败": "Sběr zdroje zvuku selhal",
   "音频写入失败，请检查存储空间": "Zápis zvuku se nezdařil, zkontrolujte úložný prostor",
   "音频采集初始化失败": "Inicializace zachycení zvuku se nezdařila",
-  "麦克风读取失败": "Čtení mikrofonu se nezdařilo"
+  "麦克风读取失败": "Čtení mikrofonu se nezdařilo",
+  "LecSync 控制台": "Konzole LecSync"
 }

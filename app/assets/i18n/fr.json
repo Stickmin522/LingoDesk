@@ -228,5 +228,6 @@
   "音源采集失败": "Échec de la collecte de la source audio",
   "音频写入失败，请检查存储空间": "Échec de l'écriture audio, veuillez vérifier l'espace de stockage",
   "音频采集初始化失败": "échec de l'initialisation de la capture audio",
-  "麦克风读取失败": "échec de la lecture du microphone"
+  "麦克风读取失败": "échec de la lecture du microphone",
+  "LecSync 控制台": "Console LecSync"
 }

@@ -981,6 +981,13 @@ class _SettingsPageState extends State<SettingsPage> {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
+                    TextButton.icon(
+                      onPressed: () => task(() async {
+                        await PlatformDesk.call('openLecSyncConsole');
+                      }),
+                      icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                      label: Text(tr('LecSync 控制台')),
+                    ),
                     const SizedBox(height: 16),
                     TextField(
                       controller: keyField,
@@ -1613,13 +1620,6 @@ class _FloatingDeskState extends State<FloatingDesk>
                         style: const TextStyle(fontSize: 10),
                       ),
                       const Spacer(),
-                      ExcludeSemantics(
-                        child: Icon(
-                          Icons.south_east_rounded,
-                          size: 18,
-                          color: Theme.of(context).colorScheme.outline,
-                        ),
-                      ),
                     ],
                   ),
                 ),

@@ -228,5 +228,6 @@
   "音源采集失败": "Ljudkällan misslyckades",
   "音频写入失败，请检查存储空间": "Ljudskrivning misslyckades, kontrollera lagringsutrymmet",
   "音频采集初始化失败": "Ljudinspelningsinitiering misslyckades",
-  "麦克风读取失败": "Mikrofonläsning misslyckades"
+  "麦克风读取失败": "Mikrofonläsning misslyckades",
+  "LecSync 控制台": "LecSync-konsol"
 }

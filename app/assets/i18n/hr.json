@@ -228,5 +228,6 @@
   "音源采集失败": "Prikupljanje audio izvora nije uspjelo",
   "音频写入失败，请检查存储空间": "Zapisivanje zvuka nije uspjelo, provjerite prostor za pohranu",
   "音频采集初始化失败": "Inicijalizacija audio snimanja nije uspjela",
-  "麦克风读取失败": "Očitavanje mikrofona nije uspjelo"
+  "麦克风读取失败": "Očitavanje mikrofona nije uspjelo",
+  "LecSync 控制台": "LecSync konzola"
 }

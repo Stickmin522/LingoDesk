@@ -228,5 +228,6 @@
   "音源采集失败": "Grumbullimi i burimit audio dështoi",
   "音频写入失败，请检查存储空间": "Shkrimi i audios dështoi, ju lutemi kontrolloni hapësirën e ruajtjes",
   "音频采集初始化失败": "Inicializimi i regjistrimit të audios dështoi",
-  "麦克风读取失败": "Leximi i mikrofonit dështoi"
+  "麦克风读取失败": "Leximi i mikrofonit dështoi",
+  "LecSync 控制台": "Konsola LecSync"
 }

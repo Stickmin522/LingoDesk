@@ -228,5 +228,6 @@
   "音源采集失败": "Ukusanyaji wa chanzo cha sauti haukufaulu",
   "音频写入失败，请检查存储空间": "Uandishi wa sauti umeshindwa, tafadhali angalia nafasi ya kuhifadhi",
   "音频采集初始化失败": "Uanzishaji wa kunasa sauti haukufaulu",
-  "麦克风读取失败": "Imeshindwa kusoma maikrofoni"
+  "麦克风读取失败": "Imeshindwa kusoma maikrofoni",
+  "LecSync 控制台": "Dashibodi ya LecSync"
 }

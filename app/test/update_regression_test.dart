@@ -117,10 +117,41 @@ void main() {
       expect(find.byTooltip('关闭悬浮字幕'), findsOneWidget);
       expect(find.byTooltip('暂停'), findsNothing);
       expect(find.byTooltip('结束并保存'), findsNothing);
+      expect(find.byIcon(Icons.south_east_rounded), findsNothing);
       await tester.tap(find.byTooltip('关闭悬浮字幕'));
       await tester.pumpAndSettle();
       expect(calls.contains('closeOverlay'), isTrue);
       expect(calls.contains('stop'), isFalse);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+  for (final active in [false, true]) {
+    testWidgets('settings console opens externally during active=$active', (
+      tester,
+    ) async {
+      final errors = <Object>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SettingsPage(
+              settings: defaults,
+              active: active,
+              save: (_) async {},
+              onError: errors.add,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('LecSync 控制台'));
+      await tester.pumpAndSettle();
+      expect(calls.where((c) => c == 'openLecSyncConsole').length, 1);
+      expect(
+        calls.where((c) => ['start', 'pause', 'resume', 'stop'].contains(c)),
+        isEmpty,
+      );
+      expect(errors, isEmpty);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     });

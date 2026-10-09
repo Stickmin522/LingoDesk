@@ -228,5 +228,6 @@
   "音源采集失败": "Audio mənbənin toplanması uğursuz oldu",
   "音频写入失败，请检查存储空间": "Səs yazısı alınmadı, yaddaş yerini yoxlayın",
   "音频采集初始化失败": "Audio çəkilişin işə salınması uğursuz oldu",
-  "麦克风读取失败": "Mikrofon oxumaq alınmadı"
+  "麦克风读取失败": "Mikrofon oxumaq alınmadı",
+  "LecSync 控制台": "LecSync konsolu"
 }

@@ -228,5 +228,6 @@
   "音源采集失败": "la recollida de fonts d'àudio ha fallat",
   "音频写入失败，请检查存储空间": "Ha fallat l'escriptura d'àudio, comproveu l'espai d'emmagatzematge",
   "音频采集初始化失败": "La inicialització de la captura d'àudio ha fallat",
-  "麦克风读取失败": "Error de lectura del micròfon"
+  "麦克风读取失败": "Error de lectura del micròfon",
+  "LecSync 控制台": "Consola de LecSync"
 }

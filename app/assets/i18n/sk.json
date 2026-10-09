@@ -228,5 +228,6 @@
   "音源采集失败": "Zhromažďovanie zdroja zvuku zlyhalo",
   "音频写入失败，请检查存储空间": "Zápis zvuku zlyhal, skontrolujte úložný priestor",
   "音频采集初始化失败": "Inicializácia záznamu zvuku zlyhala",
-  "麦克风读取失败": "Čítanie mikrofónu zlyhalo"
+  "麦克风读取失败": "Čítanie mikrofónu zlyhalo",
+  "LecSync 控制台": "Konzola LecSync"
 }

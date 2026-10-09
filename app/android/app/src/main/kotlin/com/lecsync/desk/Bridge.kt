@@ -35,6 +35,7 @@ class Bridge(private val context: Context, engine: FlutterEngine, private val ac
                     "overlay" -> if (activity != null) activity.setOverlay(input.optBoolean("enabled"), result) else {
                         result.error("foreground","请在应用内设置悬浮字幕",null)
                     }
+                    "openLecSyncConsole" -> if(activity != null) { activity.openLecSyncConsole(); result.success("{}") } else result.error("foreground","请在设置页面打开控制台",null)
                     "closeOverlay" -> { SessionService.instance?.dismissOverlay(); result.success("{}") }
                     "overlayControls" -> { SessionService.instance?.setOverlayControlsVisible(input.optBoolean("visible")); result.success("{}") }
                     "digest", "digestRetry" -> {
