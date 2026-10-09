@@ -1,0 +1,21 @@
+# Source this file before running the Linux cloud development workflow.
+export LINGODESK_REPO_DIR
+LINGODESK_REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+export LINGODESK_TOOLS_DIR="${LINGODESK_TOOLS_DIR:-$LINGODESK_REPO_DIR/.tools/cloud}"
+export CARGO_HOME="$LINGODESK_TOOLS_DIR/cargo"
+export RUSTUP_HOME="$LINGODESK_TOOLS_DIR/rustup"
+export PUB_CACHE="$LINGODESK_TOOLS_DIR/pub-cache"
+export GRADLE_USER_HOME="$LINGODESK_TOOLS_DIR/gradle"
+export ANDROID_HOME="$LINGODESK_TOOLS_DIR/android-sdk"
+export ANDROID_SDK_ROOT="$ANDROID_HOME"
+export JAVA_HOME="$LINGODESK_TOOLS_DIR/jdk/jdk-21.0.12.1"
+export ANDROID_USER_HOME="$LINGODESK_TOOLS_DIR/android-user"
+export ANDROID_AVD_HOME="$LINGODESK_TOOLS_DIR/android-avd"
+export FLUTTER_ROOT="$LINGODESK_TOOLS_DIR/flutter"
+export XDG_CONFIG_HOME="$LINGODESK_TOOLS_DIR/config"
+export XDG_CACHE_HOME="$LINGODESK_TOOLS_DIR/cache"
+export ANALYZER_STATE_LOCATION_OVERRIDE="$LINGODESK_TOOLS_DIR/analyzer-state"
+export LINGODESK_SIGNING_DIR="${LINGODESK_SIGNING_DIR:-$LINGODESK_TOOLS_DIR/signing-development}"
+export FLUTTER_SUPPRESS_ANALYTICS=true
+export CI=true
+export PATH="$CARGO_HOME/bin:$FLUTTER_ROOT/bin:$ANDROID_HOME/cmdline-tools/23.0/bin:$ANDROID_HOME/platform-tools:$JAVA_HOME/bin:$PATH"

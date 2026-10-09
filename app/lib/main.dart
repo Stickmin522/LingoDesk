@@ -1202,7 +1202,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             const SizedBox(height: 24),
             const Text(
-              'LingoDesk 1.2.0 · Android 10–17 · ARM64',
+              'LingoDesk 1.2.1 · Android 10–17 · ARM64',
               style: TextStyle(fontSize: 12, height: 1.8),
             ),
           ],
