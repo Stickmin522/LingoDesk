@@ -49,6 +49,25 @@ void main() {
       );
     }
   });
+  test(
+    'handshake diagnostics preserve localized messages and safe status codes',
+    () async {
+      await AppStrings.load('en');
+      expect(
+        tr('实时节点握手失败 [HTTP 403]'),
+        'Real-time node handshake failed [HTTP 403]',
+      );
+      expect(
+        tr('实时节点握手失败 [TLS: CERTIFICATE_VALIDATION_FAILED]'),
+        'Real-time node handshake failed [TLS: CERTIFICATE_VALIDATION_FAILED]',
+      );
+      await AppStrings.load('zh');
+      expect(
+        tr('实时节点握手失败 [WEBSOCKET: MISSING_SUBPROTOCOL]'),
+        '实时节点握手失败 [WEBSOCKET: MISSING_SUBPROTOCOL]',
+      );
+    },
+  );
   testWidgets(
     'language picker excludes the other side and searches all languages',
     (tester) async {

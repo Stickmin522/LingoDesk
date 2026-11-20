@@ -63,7 +63,20 @@ class AppStrings {
     _current = data;
   }
 
-  static String text(String key) => _current[key] ?? _english[key] ?? key;
+  static String text(String key) {
+    final exact = _current[key] ?? _english[key];
+    if (exact != null) return exact;
+    // The native core appends only bounded diagnostic codes, never raw responses.
+    // Keep the existing localized message while preserving those codes verbatim.
+    final detail = key.indexOf(' [');
+    if (detail > 0 && key.indexOf(']', detail) > detail) {
+      final prefix = key.substring(0, detail);
+      final translated = _current[prefix] ?? _english[prefix];
+      if (translated != null) return '$translated${key.substring(detail)}';
+    }
+    return key;
+  }
+
   static Locale get locale => Locale(switch (language) {
     'no' => 'nb',
     'tl' => 'tl',

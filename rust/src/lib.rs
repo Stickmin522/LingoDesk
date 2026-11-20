@@ -1,5 +1,6 @@
 mod caption_edits;
 mod captions;
+mod connection_errors;
 mod languages;
 mod record_edits;
 mod text_translation;
@@ -300,7 +301,12 @@ fn open(c: &Config) -> Result<Socket, String> {
         .max_write_buffer_size(64000)
         .max_message_size(Some(4 * 1024 * 1024));
     let (mut socket, _) = tungstenite::client_tls_with_config(request, tcp, Some(config), None)
-        .map_err(|_| "实时节点握手失败")?;
+        .map_err(|error| match error {
+            tungstenite::HandshakeError::Failure(error) => connection_errors::describe(&error),
+            tungstenite::HandshakeError::Interrupted(_) => {
+                "实时节点握手失败 [NETWORK: HANDSHAKE_INTERRUPTED]".into()
+            }
+        })?;
     set_nonblocking(&mut socket)?;
     let deadline = Instant::now() + Duration::from_secs(15);
     loop {
