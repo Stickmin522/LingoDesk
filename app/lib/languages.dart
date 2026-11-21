@@ -105,52 +105,71 @@ class LanguageField extends StatelessWidget {
     required this.onChanged,
     this.exclude,
     this.followSystem = false,
+    this.compact = false,
   });
   final String value, label;
   final String? exclude;
-  final bool followSystem;
+  final bool followSystem, compact;
   final ValueChanged<String>? onChanged;
   @override
-  Widget build(BuildContext context) => OutlinedButton(
-    style: OutlinedButton.styleFrom(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-    ),
-    onPressed: onChanged == null
-        ? null
-        : () async {
-            final selected = await showDialog<String>(
-              context: context,
-              builder: (_) => _LanguagePicker(
-                value: value,
-                exclude: exclude,
-                followSystem: followSystem,
-              ),
-            );
-            if (selected != null && selected != exclude) {
-              onChanged?.call(selected);
-            }
-          },
-    child: Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: Theme.of(context).textTheme.labelSmall),
-              const SizedBox(height: 4),
-              Text(
-                value == 'system' ? tr('跟随系统') : AppStrings.name(value),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+  Widget build(BuildContext context) {
+    final name = value == 'system' ? tr('跟随系统') : AppStrings.name(value);
+    final colors = Theme.of(context).colorScheme;
+    final nameText = Text(
+      name,
+      maxLines: compact ? 1 : 2,
+      overflow: TextOverflow.ellipsis,
+    );
+    final button = OutlinedButton(
+      style: OutlinedButton.styleFrom(
+        padding: compact
+            ? const EdgeInsets.symmetric(horizontal: 10)
+            : const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        minimumSize: compact ? const Size(0, 38) : null,
+        shape: compact
+            ? const StadiumBorder()
+            : RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: compact ? colors.surface : null,
+        side: compact ? BorderSide(color: colors.outlineVariant) : null,
+      ),
+      onPressed: onChanged == null
+          ? null
+          : () async {
+              final selected = await showDialog<String>(
+                context: context,
+                builder: (_) => _LanguagePicker(
+                  value: value,
+                  exclude: exclude,
+                  followSystem: followSystem,
+                ),
+              );
+              if (selected != null && selected != exclude) {
+                onChanged?.call(selected);
+              }
+            },
+      child: Row(
+        children: [
+          Expanded(
+            child: compact
+                ? nameText
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
+                      const SizedBox(height: 4),
+                      nameText,
+                    ],
+                  ),
           ),
-        ),
-        const Icon(Icons.expand_more_rounded, size: 18),
-      ],
-    ),
-  );
+          Icon(Icons.expand_more_rounded, size: compact ? 14 : 18),
+        ],
+      ),
+    );
+    return compact ? Tooltip(message: label, child: button) : button;
+  }
 }
 
 class _LanguagePicker extends StatefulWidget {

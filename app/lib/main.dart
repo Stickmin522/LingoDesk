@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -71,7 +72,7 @@ const defaults = <String, dynamic>{
   'speakers': true,
   'digest': true,
   'enhance': true,
-  'overlay': false,
+  'overlay': true,
   'fontSize': 20,
   'captionMode': 'both',
   'theme': 'system',
@@ -239,16 +240,33 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
   StreamSubscription<dynamic>? subscription;
   final title = TextEditingController();
   int page = 0;
+  int portraitPane = 0;
   bool actionBusy = false;
+  bool startingRecording = false;
+  Timer? startTimeout;
   String? txtExportedFor;
   String lastError = '';
   StateSetter? sheetRefresh;
+  static const audioSources = {
+    'mic': '麦克风',
+    'system': '系统内部音频',
+    'both': '麦克风 + 系统',
+  };
+
   String get phase => state['phase'] as String? ?? 'idle';
   bool get active => !['idle', 'ended'].contains(phase);
   Map<String, dynamic> get record => state;
   bool get hasRecord => (record['id'] as String? ?? '').isNotEmpty;
   bool get pendingSave => hasRecord && record['pendingSave'] == true;
+  bool get canChooseAudioSource =>
+      !active && !startingRecording && !pendingSave;
   bool get canDiscard => pendingSave && ['stopping', 'ended'].contains(phase);
+  bool get usesPortraitConsole {
+    final size = MediaQuery.sizeOf(context);
+    return size.width < 720 && size.width <= size.height;
+  }
+
+  bool get showsFloatingControls => page == 0 && usesPortraitConsole;
 
   Future<void> renameCurrent() async {
     final id = record['id'];
@@ -318,7 +336,18 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
           (state['id'] != value['id'] || state['title'] != value['title'])) {
         title.text = value['title'] as String? ?? '';
       }
-      setState(() => state = value);
+      final startResolved =
+          !['idle', 'ended'].contains(value['phase']) ||
+          value['id'] != state['id'] ||
+          value['error'] != state['error'] ||
+          value['warning'] != state['warning'];
+      setState(() {
+        state = value;
+        if (startingRecording && startResolved) {
+          startTimeout?.cancel();
+          startingRecording = false;
+        }
+      });
       if (saved) refreshHistory();
       final error = value['error'] as String? ?? '';
       if (error.isNotEmpty && error != lastError) {
@@ -341,6 +370,7 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     subscription?.cancel();
+    startTimeout?.cancel();
     title.dispose();
     super.dispose();
   }
@@ -364,6 +394,43 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
       ),
     ],
   );
+  Widget recordingLanguages({bool compact = false}) {
+    final pair = AppStrings.pair(widget.settings['pair']);
+    final disabled = active || startingRecording || actionBusy;
+    return Row(
+      children: [
+        Expanded(
+          child: LanguageField(
+            key: const ValueKey('language-left'),
+            value: pair[0],
+            label: tr('语言一'),
+            exclude: pair[1],
+            compact: compact,
+            onChanged: disabled
+                ? null
+                : (v) => action(() => save({'pair': '$v-${pair[1]}'})),
+          ),
+        ),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 8),
+          child: Icon(Icons.sync_alt_rounded, size: compact ? 16 : 20),
+        ),
+        Expanded(
+          child: LanguageField(
+            key: const ValueKey('language-right'),
+            value: pair[1],
+            label: tr('语言二'),
+            exclude: pair[0],
+            compact: compact,
+            onChanged: disabled
+                ? null
+                : (v) => action(() => save({'pair': '${pair[0]}-$v'})),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget controls() => Card(
     margin: EdgeInsets.zero,
     child: Padding(
@@ -375,6 +442,7 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
             iconTitle(Icons.tune_rounded, tr('录音设置')),
             const SizedBox(height: 20),
             TextField(
+              key: const ValueKey('current-recording-title'),
               controller: title,
               readOnly: hasRecord,
               onTap: hasRecord ? renameCurrent : null,
@@ -391,128 +459,12 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
                 prefixIcon: const Icon(Icons.edit_note_rounded),
               ),
             ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: LanguageField(
-                    key: const ValueKey('language-left'),
-                    value: AppStrings.pair(widget.settings['pair'])[0],
-                    label: tr('语言一'),
-                    exclude: AppStrings.pair(widget.settings['pair'])[1],
-                    onChanged: active
-                        ? null
-                        : (v) => action(
-                            () => save({
-                              'pair':
-                                  '$v-${AppStrings.pair(widget.settings['pair'])[1]}',
-                            }),
-                          ),
-                  ),
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 8),
-                  child: Icon(Icons.sync_alt_rounded, size: 20),
-                ),
-                Expanded(
-                  child: LanguageField(
-                    key: const ValueKey('language-right'),
-                    value: AppStrings.pair(widget.settings['pair'])[1],
-                    label: tr('语言二'),
-                    exclude: AppStrings.pair(widget.settings['pair'])[0],
-                    onChanged: active
-                        ? null
-                        : (v) => action(
-                            () => save({
-                              'pair':
-                                  '${AppStrings.pair(widget.settings['pair'])[0]}-$v',
-                            }),
-                          ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(tr('自动双向翻译'), style: Theme.of(context).textTheme.bodySmall),
-            const SizedBox(height: 18),
-            Text(
-              tr('采集音源'),
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            ...[
-              ('mic', Icons.mic_rounded, tr('麦克风'), tr('录制你身边的声音')),
-              (
-                'system',
-                Icons.volume_up_rounded,
-                tr('系统内部音频'),
-                tr('捕获允许录制的媒体声音'),
-              ),
-              (
-                'both',
-                Icons.multitrack_audio_rounded,
-                tr('麦克风 + 系统'),
-                tr('同时录制，并自动混音'),
-              ),
-            ].map(
-              (x) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(16),
-                  onTap: active
-                      ? null
-                      : () => action(() => save({'source': x.$1})),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: widget.settings['source'] == x.$1
-                          ? Theme.of(context).colorScheme.primaryContainer
-                          : Theme.of(context).colorScheme.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(x.$2),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                x.$3,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              Text(
-                                x.$4,
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (widget.settings['source'] == x.$1)
-                          const Icon(Icons.check_circle_rounded, size: 20),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            SwitchListTile.adaptive(
-              contentPadding: EdgeInsets.zero,
-              title: Text(tr('悬浮字幕')),
-              subtitle: Text(tr('记住开启状态；关闭浮窗不停止录音')),
-              value: widget.settings['overlay'] == true,
-              onChanged: (v) => action(() async {
-                await PlatformDesk.call('overlay', {'enabled': v});
-                await widget.reload();
-                await WidgetsBinding.instance.endOfFrame;
-                sheetRefresh?.call(() {});
-              }),
-            ),
+            if (!usesPortraitConsole) ...[
+              const SizedBox(height: 16),
+              recordingLanguages(),
+              const SizedBox(height: 8),
+              Text(tr('自动双向翻译'), style: Theme.of(context).textTheme.bodySmall),
+            ],
             if (widget.settings['source'] != 'mic')
               Padding(
                 padding: const EdgeInsets.only(top: 8),
@@ -546,9 +498,28 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
     return result is Map && result['discarded'] == true;
   }
 
-  Widget toolbar({required bool compact}) {
+  Future<void> startRecording() async {
+    setState(() => startingRecording = true);
+    try {
+      await PlatformDesk.call('start', {
+        'title': title.text.trim().isEmpty ? tr('我的听译记录') : title.text,
+      });
+      if (mounted && startingRecording) {
+        startTimeout = Timer(const Duration(seconds: 2), () {
+          if (mounted) setState(() => startingRecording = false);
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => startingRecording = false);
+      rethrow;
+    }
+  }
+
+  Widget toolbar({required bool compact, bool portrait = false}) {
     final busy =
-        actionBusy || ['connecting', 'pausing', 'stopping'].contains(phase);
+        actionBusy ||
+        startingRecording ||
+        ['connecting', 'pausing', 'stopping'].contains(phase);
     final (icon, label, task) = switch (phase) {
       'recording' || 'pausing' || 'connecting' || 'stopping' => (
         Icons.pause_rounded,
@@ -570,64 +541,108 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
           });
         },
       ),
-      _ => (
-        Icons.mic_rounded,
-        '开始录音',
-        () => PlatformDesk.call('start', {
-          'title': title.text.trim().isEmpty ? tr('我的听译记录') : title.text,
-        }),
-      ),
+      _ => (Icons.mic_rounded, '开始录音', startRecording),
     };
+    final export = hasRecord
+        ? recordingButton(
+            txtExportedFor == record['id']
+                ? Icons.download_done_rounded
+                : Icons.download_rounded,
+            'TXT',
+            exportTxt,
+            enabled: !actionBusy,
+            compact: compact,
+            portrait: portrait,
+          )
+        : null;
+    final primary = recordingButton(
+      icon,
+      label,
+      () async {
+        await task();
+      },
+      enabled: !busy,
+      primary: true,
+      compact: compact,
+      portrait: portrait,
+    );
+    final end = active
+        ? recordingButton(
+            Icons.stop_rounded,
+            '停止录音',
+            () async {
+              await PlatformDesk.call('stop');
+            },
+            enabled: !actionBusy && phase != 'stopping',
+            compact: compact,
+            portrait: portrait,
+          )
+        : pendingSave
+        ? recordingButton(
+            Icons.delete_outline_rounded,
+            '放弃',
+            () async {
+              await discardCurrent();
+            },
+            enabled: !actionBusy,
+            compact: compact,
+            portrait: portrait,
+          )
+        : null;
+    if (portrait) {
+      final history = IconButton(
+        tooltip: tr('记录'),
+        icon: const Icon(Icons.history_rounded),
+        onPressed: () => setState(() => page = 1),
+      );
+      final settings = IconButton(
+        key: const ValueKey('capture-options'),
+        tooltip: tr('设置'),
+        icon: const Icon(Icons.more_vert_rounded),
+        onPressed: () => setState(() => page = 2),
+      );
+      final playback = recordingButton(
+        Icons.play_circle_outline_rounded,
+        '回放',
+        () async {
+          await PlatformDesk.call('play', {'id': record['id']});
+        },
+        enabled: !actionBusy,
+        compact: compact,
+        portrait: true,
+      );
+      final wide = export != null || end != null;
+      return Row(
+        children: [
+          Expanded(
+            child: wide
+                ? Row(
+                    children: [
+                      Expanded(child: history),
+                      Expanded(child: export ?? const SizedBox()),
+                    ],
+                  )
+                : history,
+          ),
+          primary,
+          Expanded(
+            child: wide
+                ? Row(
+                    children: [
+                      Expanded(child: end ?? playback),
+                      Expanded(child: settings),
+                    ],
+                  )
+                : settings,
+          ),
+        ],
+      );
+    }
     return Row(
       children: [
-        Expanded(
-          child: hasRecord
-              ? recordingButton(
-                  txtExportedFor == record['id']
-                      ? Icons.download_done_rounded
-                      : Icons.download_rounded,
-                  'TXT',
-                  exportTxt,
-                  enabled: !actionBusy,
-                  compact: compact,
-                )
-              : const SizedBox(),
-        ),
-        Expanded(
-          child: recordingButton(
-            icon,
-            label,
-            () async {
-              await task();
-            },
-            enabled: !busy,
-            primary: true,
-            compact: compact,
-          ),
-        ),
-        Expanded(
-          child: active
-              ? recordingButton(
-                  Icons.stop_rounded,
-                  '停止录音',
-                  () async {
-                    await PlatformDesk.call('stop');
-                  },
-                  enabled: !actionBusy && phase != 'stopping',
-                  compact: compact,
-                )
-              : pendingSave
-              ? recordingButton(
-                  Icons.delete_outline_rounded,
-                  '放弃',
-                  () async {
-                    await discardCurrent();
-                  },
-                  enabled: !actionBusy,
-                  compact: compact,
-                )
-              : const SizedBox(),
-        ),
+        Expanded(child: export ?? const SizedBox()),
+        Expanded(child: primary),
+        Expanded(child: end ?? const SizedBox()),
       ],
     );
   }
@@ -639,23 +654,83 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
     required bool enabled,
     required bool compact,
     bool primary = false,
+    bool portrait = false,
   }) {
     final onPressed = enabled ? () => action(task) : null;
+    final colors = Theme.of(context).colorScheme;
+    final accent = switch (icon) {
+      Icons.mic_rounded ||
+      Icons.play_arrow_rounded ||
+      Icons.play_circle_outline_rounded => colors.primary,
+      Icons.pause_rounded => colors.outline,
+      Icons.stop_rounded => colors.error,
+      _ => null,
+    };
+    final onPrimary = icon == Icons.pause_rounded
+        ? colors.surface
+        : colors.onPrimary;
+    if (portrait) {
+      if (primary && label == '保存') {
+        return SizedBox(
+          width: 84,
+          child: TextButton(
+            onPressed: onPressed,
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              minimumSize: const Size(0, 48),
+              backgroundColor: colors.primaryContainer,
+              foregroundColor: colors.onPrimaryContainer,
+            ),
+            child: Text(
+              tr(label),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        );
+      }
+      return IconButton(
+        tooltip: tr(label),
+        style: IconButton.styleFrom(
+          fixedSize: primary ? const Size(52, 52) : null,
+          foregroundColor: accent,
+        ),
+        onPressed: onPressed,
+        icon: label == 'TXT' && icon != Icons.download_done_rounded
+            ? Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              )
+            : Icon(
+                icon == Icons.mic_rounded ? Icons.mic_none_rounded : icon,
+                size: primary ? 28 : null,
+              ),
+      );
+    }
     if (compact) {
       return Center(
         child: (primary ? FilledButton.icon : TextButton.icon)(
           onPressed: onPressed,
+          style: primary
+              ? FilledButton.styleFrom(
+                  backgroundColor: accent,
+                  foregroundColor: onPrimary,
+                )
+              : TextButton.styleFrom(foregroundColor: accent),
           icon: Icon(icon, size: 18),
           label: Text(tr(label), maxLines: 1, overflow: TextOverflow.ellipsis),
         ),
       );
     }
-    final colors = Theme.of(context).colorScheme;
     return Center(
       child: TextButton(
         onPressed: onPressed,
         style: TextButton.styleFrom(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          foregroundColor: primary ? null : accent,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -667,13 +742,13 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: enabled
-                      ? colors.primary
+                      ? accent ?? colors.primary
                       : colors.surfaceContainerHighest,
                 ),
                 child: Icon(
                   icon,
                   size: 29,
-                  color: enabled ? colors.onPrimary : colors.onSurfaceVariant,
+                  color: enabled ? onPrimary : colors.onSurfaceVariant,
                 ),
               )
             else
@@ -686,25 +761,290 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
     );
   }
 
-  Widget subtitles() => SessionPanels(
-    key: const ValueKey('current-session'),
-    record: record,
-    settings: widget.settings,
-    onModeChanged: (mode) => action(() => save({'captionMode': mode})),
-    onOverlay: () => action(() async {
-      await PlatformDesk.call('overlay', {'enabled': true});
-      await widget.reload();
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(tr('悬浮字幕已记住，返回桌面后自动显示'))));
-      }
-    }),
-    onError: showError,
-    saved: phase == 'ended' && hasRecord && !pendingSave,
+  Future<void> setOverlay(bool enabled) async {
+    await PlatformDesk.call('overlay', {'enabled': enabled});
+    await widget.reload();
+  }
+
+  Widget subtitles({bool portrait = false, double bottomInset = 0}) =>
+      SessionPanels(
+        key: const ValueKey('current-session'),
+        record: record,
+        settings: widget.settings,
+        selectedPane: portrait ? portraitPane : null,
+        bottomInset: bottomInset,
+        onModeChanged: (mode) => action(() => save({'captionMode': mode})),
+        onError: showError,
+        saved: phase == 'ended' && hasRecord && !pendingSave,
+      );
+
+  Future<void> openRecordingSettings() => showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    builder: (_) => StatefulBuilder(
+      builder: (context, refresh) {
+        sheetRefresh = refresh;
+        return SizedBox(
+          height: MediaQuery.sizeOf(context).height * .8,
+          child: controls(),
+        );
+      },
+    ),
+  ).whenComplete(() => sheetRefresh = null);
+
+  Widget recordingName({bool dense = false}) => TextButton.icon(
+    key: const ValueKey('rename-current-recording'),
+    onPressed: renameCurrent,
+    style: TextButton.styleFrom(
+      alignment: dense
+          ? AlignmentDirectional.centerEnd
+          : AlignmentDirectional.centerStart,
+      minimumSize: dense ? const Size(0, 32) : null,
+      padding: dense ? const EdgeInsets.symmetric(horizontal: 4) : null,
+      tapTargetSize: dense ? MaterialTapTargetSize.shrinkWrap : null,
+      textStyle: dense ? Theme.of(context).textTheme.labelSmall : null,
+    ),
+    icon: Icon(Icons.edit_outlined, size: dense ? 14 : 18),
+    label: Text(
+      record['title'] as String? ?? tr('我的听译记录'),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      textDirection: contentDirection(record['title'] as String? ?? ''),
+    ),
   );
+
+  Widget portraitStatus() {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final status = phase == 'ended' && pendingSave
+        ? tr('录音尚未保存')
+        : phaseLabel(phase);
+    final warning = record['warning'] as String? ?? '';
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 300),
+      child: Material(
+        color: colors.surfaceContainerHigh.withValues(alpha: .94),
+        shape: const StadiumBorder(),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (warning.isNotEmpty) ...[
+                Tooltip(
+                  message: tr(warning),
+                  triggerMode: TooltipTriggerMode.tap,
+                  child: Icon(
+                    Icons.info_outline_rounded,
+                    size: 18,
+                    color: colors.tertiary,
+                  ),
+                ),
+                const SizedBox(width: 5),
+              ],
+              Flexible(
+                child: Text(
+                  status,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                duration(record['durationMs']),
+                textDirection: TextDirection.ltr,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+              if (hasRecord) ...[
+                const SizedBox(width: 4),
+                Flexible(child: recordingName(dense: true)),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget floatingControls() {
+    final colors = Theme.of(context).colorScheme;
+    final dark = colors.brightness == Brightness.dark;
+    const curve = BorderRadius.all(Radius.circular(40));
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (hasRecord || active) ...[
+              portraitStatus(),
+              const SizedBox(height: 6),
+            ],
+            if (!active && !pendingSave && !startingRecording) ...[
+              SizedBox(width: 248, child: recordingLanguages(compact: true)),
+              const SizedBox(height: 8),
+            ],
+            SizedBox(
+              width: phase == 'ended' && pendingSave
+                  ? 300
+                  : hasRecord || active
+                  ? 280
+                  : 204,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: curve,
+                  boxShadow: [
+                    BoxShadow(
+                      color: colors.shadow.withValues(alpha: dark ? .32 : .16),
+                      blurRadius: 22,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  key: const ValueKey('floating-recording-controls'),
+                  borderRadius: curve,
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                    child: Material(
+                      color: colors.surface.withValues(alpha: dark ? .90 : .88),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: curve,
+                        side: BorderSide(
+                          color: colors.outlineVariant.withValues(alpha: .55),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        child: toolbar(compact: true, portrait: true),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget captureSelector<T>({
+    required String id,
+    required double width,
+    required Map<T, String> labels,
+    required T selected,
+    required ValueChanged<T>? onChanged,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    return Align(
+      alignment: Alignment.topCenter,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 6, 12, 2),
+        child: SizedBox(
+          width: width,
+          child: SegmentedButton<T>(
+            key: ValueKey(id),
+            expandedInsets: EdgeInsets.zero,
+            showSelectedIcon: false,
+            style: SegmentedButton.styleFrom(
+              backgroundColor: colors.surface,
+              selectedBackgroundColor: colors.primaryContainer,
+              selectedForegroundColor: colors.onPrimaryContainer,
+              side: BorderSide(color: colors.outlineVariant),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              shape: const StadiumBorder(),
+            ),
+            segments: [
+              for (final entry in labels.entries)
+                ButtonSegment(
+                  value: entry.key,
+                  label: Text(
+                    tr(entry.value),
+                    maxLines: 2,
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+            selected: {selected},
+            onSelectionChanged: onChanged == null
+                ? null
+                : (value) => onChanged(value.single),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget portraitPaneSelector() => captureSelector(
+    id: 'portrait-pane-selector',
+    width: 252,
+    labels: const {0: '双语字幕', 1: '实时纪要'},
+    selected: portraitPane,
+    onChanged: (value) => setState(() => portraitPane = value),
+  );
+
+  Widget captureAudioSource() {
+    final configured = widget.settings['source'];
+    final selected = audioSources.containsKey(configured)
+        ? configured as String
+        : 'mic';
+    if (canChooseAudioSource) {
+      return captureSelector(
+        id: 'audio-source-selector',
+        width: 320,
+        labels: audioSources,
+        selected: selected,
+        onChanged: actionBusy
+            ? null
+            : (value) => action(() => save({'source': value})),
+      );
+    }
+    final recorded = active || pendingSave ? record['source'] : null;
+    final label = audioSources[recorded] ?? audioSources[selected]!;
+    final theme = Theme.of(context);
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
+        child: Text(
+          tr(label),
+          key: const ValueKey('active-audio-source'),
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget capture() => LayoutBuilder(
     builder: (context, c) {
+      final audioSource = captureAudioSource();
+      if (usesPortraitConsole) {
+        return Column(
+          children: [
+            if (canChooseAudioSource) audioSource,
+            if (!canChooseAudioSource || hasRecord) portraitPaneSelector(),
+            if (!canChooseAudioSource) audioSource,
+            Expanded(
+              child: subtitles(
+                portrait: true,
+                bottomInset: MediaQuery.paddingOf(context).bottom,
+              ),
+            ),
+          ],
+        );
+      }
       final hinges = MediaQuery.of(context).displayFeatures
           .where((f) => f.bounds.width > 0 && f.bounds.height > f.bounds.width)
           .toList();
@@ -724,23 +1064,11 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
       final gap = hinges.isEmpty
           ? 20.0
           : math.max(20.0, hinges.first.bounds.width + 16);
-      final nameButton = TextButton.icon(
-        key: const ValueKey('rename-current-recording'),
-        onPressed: renameCurrent,
-        style: TextButton.styleFrom(
-          alignment: AlignmentDirectional.centerStart,
-        ),
-        icon: const Icon(Icons.edit_outlined, size: 18),
-        label: Text(
-          record['title'] as String? ?? tr('我的听译记录'),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textDirection: contentDirection(record['title'] as String? ?? ''),
-        ),
-      );
+      final nameButton = recordingName();
       final captionPane = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (side && !compact) audioSource,
           Wrap(
             crossAxisAlignment: WrapCrossAlignment.center,
             spacing: 12,
@@ -818,7 +1146,15 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
               width: folded
                   ? foldedLeft
                   : math.min(320, (c.maxWidth - gap) * .36),
-              child: controls(),
+              child: compact
+                  ? Column(
+                      children: [
+                        audioSource,
+                        const SizedBox(height: 8),
+                        Expanded(child: controls()),
+                      ],
+                    )
+                  : controls(),
             ),
             SizedBox(width: gap),
             Expanded(child: captionPane),
@@ -827,6 +1163,7 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
       }
       return Column(
         children: [
+          audioSource,
           Row(
             children: [
               Expanded(
@@ -842,20 +1179,7 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
               ),
               IconButton(
                 tooltip: tr('录音设置'),
-                onPressed: () => showModalBottomSheet<void>(
-                  context: context,
-                  isScrollControlled: true,
-                  useSafeArea: true,
-                  builder: (_) => StatefulBuilder(
-                    builder: (context, refresh) {
-                      sheetRefresh = refresh;
-                      return SizedBox(
-                        height: MediaQuery.sizeOf(context).height * .8,
-                        child: controls(),
-                      );
-                    },
-                  ),
-                ).whenComplete(() => sheetRefresh = null),
+                onPressed: openRecordingSettings,
                 icon: const Icon(Icons.tune_rounded),
               ),
             ],
@@ -866,11 +1190,14 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
               children: [
                 Expanded(
                   child: Text(
-                    '${AppStrings.pair(widget.settings['pair']).map(AppStrings.name).join(' ⇄ ')} · ${{'mic': tr('麦克风'), 'system': tr('系统内部音频'), 'both': tr('麦克风 + 系统')}[widget.settings['source']]}',
+                    AppStrings.pair(widget.settings['pair'])
+                        .map(AppStrings.name)
+                        .join(' ⇄ '),
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
-                if (widget.settings['overlay'] == true)
+                if (widget.settings['overlay'] == true &&
+                    widget.settings['overlayPermission'] != false)
                   const Icon(Icons.picture_in_picture_alt_rounded, size: 18),
               ],
             ),
@@ -985,103 +1312,130 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
     ],
   );
   @override
-  Widget build(BuildContext context) => PopScope<Object?>(
-    canPop: !canDiscard,
-    onPopInvokedWithResult: (didPop, _) {
-      if (!didPop && canDiscard) {
-        action(() async {
-          if (await discardCurrent()) await SystemNavigator.pop();
-        });
-      }
-    },
-    child: Scaffold(
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, c) {
-            final wide = c.maxWidth >= 720;
-            final content = Padding(
-              padding: EdgeInsets.all(wide ? 24 : 16),
-              child: switch (page) {
-                1 => historyPage(),
-                2 => SettingsPage(
-                  settings: widget.settings,
-                  active: active,
-                  save: save,
-                  onError: showError,
-                ),
-                _ =>
-                  MediaQuery.of(context).displayFeatures.any(
-                        (f) =>
-                            f.bounds.height > 0 &&
-                            f.bounds.width > f.bounds.height,
-                      )
-                      ? DisplayFeatureSubScreen(
-                          anchorPoint: Offset(
-                            MediaQuery.sizeOf(context).width / 2,
-                            0,
-                          ),
-                          child: capture(),
-                        )
-                      : capture(),
-              },
-            );
-            return Row(
-              children: [
-                if (wide)
-                  NavigationRail(
-                    scrollable: true,
-                    selectedIndex: page,
-                    onDestinationSelected: (v) => setState(() => page = v),
-                    labelType: NavigationRailLabelType.all,
-                    leading: const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24),
-                      child: Icon(Icons.graphic_eq_rounded, size: 34),
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final background = showsFloatingControls
+        ? Color.alphaBlend(
+            colors.primary.withValues(alpha: phase == 'idle' ? 0 : .025),
+            colors.surface,
+          )
+        : theme.scaffoldBackgroundColor;
+    final dark = theme.brightness == Brightness.dark;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: background,
+        statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+        statusBarBrightness: theme.brightness,
+        systemStatusBarContrastEnforced: false,
+      ),
+      child: PopScope<Object?>(
+        canPop: !canDiscard,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop && canDiscard) {
+            action(() async {
+              if (await discardCurrent()) await SystemNavigator.pop();
+            });
+          }
+        },
+        child: Scaffold(
+          backgroundColor: background,
+          extendBody: showsFloatingControls,
+          body: SafeArea(
+            bottom: !showsFloatingControls,
+            child: LayoutBuilder(
+              builder: (context, c) {
+                final wide = c.maxWidth >= 720;
+                final content = Padding(
+                  padding: showsFloatingControls
+                      ? EdgeInsets.zero
+                      : EdgeInsets.all(wide ? 24 : 16),
+                  child: switch (page) {
+                    1 => historyPage(),
+                    2 => SettingsPage(
+                      settings: widget.settings,
+                      active: active,
+                      save: save,
+                      onError: showError,
+                      onOverlayChanged: setOverlay,
                     ),
-                    destinations: [
-                      NavigationRailDestination(
-                        icon: const Icon(Icons.subtitles_outlined),
-                        selectedIcon: const Icon(Icons.subtitles_rounded),
-                        label: Text(tr('听译')),
+                    _ =>
+                      MediaQuery.of(context).displayFeatures.any(
+                            (f) =>
+                                f.bounds.height > 0 &&
+                                f.bounds.width > f.bounds.height,
+                          )
+                          ? DisplayFeatureSubScreen(
+                              anchorPoint: Offset(
+                                MediaQuery.sizeOf(context).width / 2,
+                                0,
+                              ),
+                              child: capture(),
+                            )
+                          : capture(),
+                  },
+                );
+                return Row(
+                  children: [
+                    if (wide)
+                      NavigationRail(
+                        scrollable: true,
+                        selectedIndex: page,
+                        onDestinationSelected: (v) => setState(() => page = v),
+                        labelType: NavigationRailLabelType.all,
+                        leading: const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 24),
+                          child: Icon(Icons.graphic_eq_rounded, size: 34),
+                        ),
+                        destinations: [
+                          NavigationRailDestination(
+                            icon: const Icon(Icons.subtitles_outlined),
+                            selectedIcon: const Icon(Icons.subtitles_rounded),
+                            label: Text(tr('听译')),
+                          ),
+                          NavigationRailDestination(
+                            icon: const Icon(Icons.history_rounded),
+                            label: Text(tr('记录')),
+                          ),
+                          NavigationRailDestination(
+                            icon: const Icon(Icons.tune_rounded),
+                            label: Text(tr('设置')),
+                          ),
+                        ],
                       ),
-                      NavigationRailDestination(
-                        icon: const Icon(Icons.history_rounded),
-                        label: Text(tr('记录')),
-                      ),
-                      NavigationRailDestination(
-                        icon: const Icon(Icons.tune_rounded),
-                        label: Text(tr('设置')),
-                      ),
-                    ],
-                  ),
-                Expanded(child: content),
-              ],
-            );
-          },
+                    Expanded(child: content),
+                  ],
+                );
+              },
+            ),
+          ),
+          bottomNavigationBar: showsFloatingControls
+              ? floatingControls()
+              : MediaQuery.sizeOf(context).width < 720
+              ? NavigationBar(
+                  selectedIndex: page,
+                  onDestinationSelected: (v) => setState(() => page = v),
+                  destinations: [
+                    NavigationDestination(
+                      icon: const Icon(Icons.subtitles_outlined),
+                      selectedIcon: const Icon(Icons.subtitles_rounded),
+                      label: tr('听译'),
+                    ),
+                    NavigationDestination(
+                      icon: const Icon(Icons.history_rounded),
+                      label: tr('记录'),
+                    ),
+                    NavigationDestination(
+                      icon: const Icon(Icons.tune_rounded),
+                      label: tr('设置'),
+                    ),
+                  ],
+                )
+              : null,
         ),
       ),
-      bottomNavigationBar: MediaQuery.sizeOf(context).width < 720
-          ? NavigationBar(
-              selectedIndex: page,
-              onDestinationSelected: (v) => setState(() => page = v),
-              destinations: [
-                NavigationDestination(
-                  icon: const Icon(Icons.subtitles_outlined),
-                  selectedIcon: const Icon(Icons.subtitles_rounded),
-                  label: tr('听译'),
-                ),
-                NavigationDestination(
-                  icon: const Icon(Icons.history_rounded),
-                  label: tr('记录'),
-                ),
-                NavigationDestination(
-                  icon: const Icon(Icons.tune_rounded),
-                  label: tr('设置'),
-                ),
-              ],
-            )
-          : null,
-    ),
-  );
+    );
+  }
 }
 
 class SettingsPage extends StatefulWidget {
@@ -1091,11 +1445,13 @@ class SettingsPage extends StatefulWidget {
     required this.active,
     required this.save,
     required this.onError,
+    this.onOverlayChanged,
   });
   final Map<String, dynamic> settings;
   final bool active;
   final Future<void> Function(Map<String, dynamic>) save;
   final void Function(Object) onError;
+  final Future<void> Function(bool)? onOverlayChanged;
   @override
   State<SettingsPage> createState() => _SettingsPageState();
 }
@@ -1135,9 +1491,7 @@ class _SettingsPageState extends State<SettingsPage> {
               tr('连接与显示'),
               style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700),
             ),
-            const SizedBox(height: 8),
-            Text(tr('使用你的 LecSync API Key。音频按服务商实际用量计费。')),
-            const SizedBox(height: 24),
+            const SizedBox(height: 12),
             Card(
               margin: EdgeInsets.zero,
               child: Padding(
@@ -1151,13 +1505,6 @@ class _SettingsPageState extends State<SettingsPage> {
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
                       ),
-                    ),
-                    TextButton.icon(
-                      onPressed: () => task(() async {
-                        await PlatformDesk.call('openLecSyncConsole');
-                      }),
-                      icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                      label: Text(tr('LecSync 控制台')),
                     ),
                     const SizedBox(height: 16),
                     TextField(
@@ -1250,7 +1597,30 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                       style: const TextStyle(fontSize: 12, height: 1.6),
                     ),
-                    const Divider(height: 32),
+                    const SizedBox(height: 10),
+                    Text(
+                      tr('使用你的 LecSync API Key。音频按服务商实际用量计费。'),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    TextButton.icon(
+                      onPressed: () => task(() async {
+                        await PlatformDesk.call('openLecSyncConsole');
+                      }),
+                      icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                      label: Text(tr('LecSync 控制台')),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Card(
+              margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     for (final item in [
                       ('speakers', tr('区分说话人'), tr('标注不同说话人的字幕')),
                       ('digest', tr('实时纪要'), tr('整理话题与要点')),
@@ -1353,6 +1723,52 @@ class _SettingsPageState extends State<SettingsPage> {
                       onChanged: (v) => task(() => widget.save({'theme': v})),
                     ),
                     const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      isExpanded: true,
+                      initialValue: s['captionMode'] as String? ?? 'both',
+                      decoration: InputDecoration(labelText: tr('字幕显示')),
+                      items: [
+                        for (final (value, label) in [
+                          ('both', '原文与译文'),
+                          ('source', '仅原文'),
+                          ('translation', '仅译文'),
+                        ])
+                          DropdownMenuItem(
+                            value: value,
+                            child: Text(
+                              tr(label),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                      onChanged: (value) =>
+                          task(() => widget.save({'captionMode': value})),
+                    ),
+                    const SizedBox(height: 16),
+                    SwitchListTile.adaptive(
+                      key: const ValueKey('floating-caption-switch'),
+                      title: Text(tr('悬浮字幕')),
+                      subtitle: Text(tr('记住开启状态；关闭浮窗不停止录音')),
+                      value: s['overlay'] != false,
+                      onChanged: busy || widget.onOverlayChanged == null
+                          ? null
+                          : (value) =>
+                                task(() => widget.onOverlayChanged!(value)),
+                    ),
+                    if (s['overlay'] != false &&
+                        s['overlayPermission'] == false &&
+                        widget.onOverlayChanged != null)
+                      ListTile(
+                        title: Text(tr('未开启显示在其他应用上层权限')),
+                        trailing: const Icon(
+                          Icons.open_in_new_rounded,
+                          size: 18,
+                        ),
+                        onTap: busy
+                            ? null
+                            : () => task(() => widget.onOverlayChanged!(true)),
+                      ),
+                    const SizedBox(height: 16),
                     Text('${tr('字幕字号')} · ${s['fontSize']}'),
                     Slider(
                       value: (s['fontSize'] as num).toDouble(),
@@ -1396,9 +1812,12 @@ class CaptionFeed extends StatefulWidget {
     required this.record,
     required this.settings,
     this.floating = false,
+    this.dense = false,
+    this.bottomInset = 0,
   });
   final Map<String, dynamic> record, settings;
-  final bool floating;
+  final bool floating, dense;
+  final double bottomInset;
   @override
   State<CaptionFeed> createState() => _CaptionFeedState();
 }
@@ -1586,6 +2005,10 @@ class _CaptionFeedState extends State<CaptionFeed> {
     final displayRows = captions?.isNotEmpty == true;
     final preview = displayRows ? '' : record['preview'] as String? ?? '';
     final mode = widget.settings['captionMode'];
+    final colors = Theme.of(context).colorScheme;
+    final grouped =
+        !widget.floating &&
+        (widget.dense || !['idle', 'ended', null].contains(record['phase']));
     final requestedFont = (widget.settings['fontSize'] as num? ?? 20)
         .toDouble();
     final size = MediaQuery.sizeOf(context);
@@ -1597,6 +2020,20 @@ class _CaptionFeedState extends State<CaptionFeed> {
               .toDouble()
         : requestedFont;
     if (list.isEmpty && preview.isEmpty) {
+      if (widget.dense) {
+        return Center(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + widget.bottomInset),
+            child: Text(
+              tr(record['phase'] == 'recording' ? '正在聆听…' : '听到的内容，在这里出现'),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        );
+      }
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(20),
@@ -1663,7 +2100,14 @@ class _CaptionFeedState extends State<CaptionFeed> {
             },
             child: ListView.builder(
               controller: scroll,
-              padding: EdgeInsets.all(widget.floating ? 14 : 20),
+              padding: widget.dense
+                  ? EdgeInsets.fromLTRB(
+                      12,
+                      8,
+                      12,
+                      4 + (follow ? widget.bottomInset : 0),
+                    )
+                  : EdgeInsets.all(widget.floating ? 14 : 20),
               itemCount: list.length + (preview.isNotEmpty ? 1 : 0),
               itemBuilder: (context, i) {
                 final partial =
@@ -1677,76 +2121,102 @@ class _CaptionFeedState extends State<CaptionFeed> {
                         'startMs': record['durationMs'],
                       }
                     : list[i] as Map;
-                return Padding(
-                  key: ValueKey(s['id'] ?? 'preview'),
-                  padding: EdgeInsets.only(bottom: widget.floating ? 10 : 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        partial
-                            ? tr('识别中…')
-                            : '${duration(s['startMs'])}${(s['speaker'] as String? ?? '').isNotEmpty ? ' · ${tr('说话人')} ${s['speaker']}' : ''}${s['enhanced'] == true ? ' · ${tr('已精修')}' : ''}',
+                final speaker = int.tryParse('${s['speaker']}');
+                final captionStatus = [
+                  partial ? tr('识别中…') : duration(s['startMs']),
+                  if (speaker != null && speaker > 0) '${tr('说话人')} $speaker',
+                  if (!partial && s['enhanced'] == true) tr('已精修'),
+                ].join(' · ');
+                final content = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      captionStatus,
+                      style: TextStyle(fontSize: 11, color: colors.outline),
+                    ),
+                    SizedBox(height: widget.dense ? 2 : 7),
+                    if (mode != 'translation' &&
+                        (s['text'] as String? ?? '').isNotEmpty)
+                      SelectableText(
+                        s['text'] as String,
+                        onTap: () => textActions(
+                          s,
+                          displayRows ? 'caption' : 'segment',
+                          'text',
+                          s['text'] as String,
+                        ),
+                        textDirection: contentDirection(s['text'] as String),
                         style: TextStyle(
-                          fontSize: 11,
-                          color: Theme.of(context).colorScheme.outline,
+                          fontSize: font - 2,
+                          height: widget.dense ? 1.35 : 1.6,
+                          color: colors.onSurfaceVariant,
                         ),
                       ),
-                      const SizedBox(height: 7),
-                      if (mode != 'translation' &&
-                          (s['text'] as String? ?? '').isNotEmpty)
-                        SelectableText(
-                          s['text'] as String,
-                          onTap: () => textActions(
-                            s,
-                            displayRows ? 'caption' : 'segment',
-                            'text',
-                            s['text'] as String,
-                          ),
-                          textDirection: contentDirection(s['text'] as String),
-                          style: TextStyle(
-                            fontSize: font - 2,
-                            height: 1.6,
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurfaceVariant,
-                          ),
-                        ),
-                      if (mode != 'source' &&
-                          (s['translation'] as String? ?? '').isNotEmpty)
-                        SelectableText(
+                    if (mode != 'source' &&
+                        (s['translation'] as String? ?? '').isNotEmpty)
+                      SelectableText(
+                        s['translation'] as String,
+                        onTap: () => textActions(
+                          s,
+                          displayRows ? 'caption' : 'segment',
+                          'translation',
                           s['translation'] as String,
-                          onTap: () => textActions(
-                            s,
-                            displayRows ? 'caption' : 'segment',
-                            'translation',
-                            s['translation'] as String,
-                          ),
-                          textDirection: contentDirection(
-                            s['translation'] as String,
-                          ),
-                          style: TextStyle(
-                            fontSize: font,
-                            height: 1.6,
-                            fontWeight: FontWeight.w600,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
                         ),
-                    ],
+                        textDirection: contentDirection(
+                          s['translation'] as String,
+                        ),
+                        style: TextStyle(
+                          fontSize: font,
+                          height: widget.dense ? 1.35 : 1.6,
+                          fontWeight: FontWeight.w600,
+                          color: colors.primary,
+                        ),
+                      ),
+                  ],
+                );
+                return Padding(
+                  key: ValueKey(s['id'] ?? 'preview'),
+                  padding: EdgeInsets.only(
+                    bottom: widget.floating || grouped ? 8 : 20,
                   ),
+                  child: grouped
+                      ? Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Color.alphaBlend(
+                              colors.primary.withValues(alpha: .055),
+                              colors.surfaceContainerLow,
+                            ),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: colors.outlineVariant.withValues(
+                                alpha: .50,
+                              ),
+                            ),
+                          ),
+                          child: content,
+                        )
+                      : content,
                 );
               },
             ),
           ),
         ),
         if (!follow && !widget.floating)
-          TextButton.icon(
-            onPressed: () {
-              setState(() => follow = true);
-              bottom();
-            },
-            icon: const Icon(Icons.south_rounded, size: 16),
-            label: Text(tr('回到底部并跟随')),
+          Padding(
+            padding: EdgeInsets.only(bottom: widget.bottomInset),
+            child: TextButton.icon(
+              onPressed: () {
+                setState(() => follow = true);
+                bottom();
+              },
+              icon: const Icon(Icons.south_rounded, size: 16),
+              label: Text(tr('回到底部并跟随')),
+            ),
           ),
       ],
     );

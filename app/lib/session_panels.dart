@@ -30,13 +30,15 @@ class SessionPanels extends StatefulWidget {
     required this.settings,
     required this.onError,
     this.onModeChanged,
-    this.onOverlay,
+    this.selectedPane,
+    this.bottomInset = 0,
     this.saved = false,
   });
   final Map<String, dynamic> record, settings;
   final void Function(Object) onError;
   final void Function(String)? onModeChanged;
-  final VoidCallback? onOverlay;
+  final int? selectedPane;
+  final double bottomInset;
   final bool saved;
   @override
   State<SessionPanels> createState() => _SessionPanelsState();
@@ -96,90 +98,92 @@ class _SessionPanelsState extends State<SessionPanels> {
         : Wrap(children: buttons);
   }
 
-  @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) => Card(
-      margin: EdgeInsets.zero,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 6, 10),
-            child: Row(
-              children: [
-                Expanded(
-                  child: SegmentedButton<int>(
-                    showSelectedIcon: false,
-                    style: const ButtonStyle(
-                      visualDensity: VisualDensity.compact,
-                      padding: WidgetStatePropertyAll(
-                        EdgeInsets.symmetric(horizontal: 8),
-                      ),
-                      textStyle: WidgetStatePropertyAll(
-                        TextStyle(fontSize: 12),
-                      ),
-                    ),
-                    segments: [
-                      ButtonSegment(value: 0, label: Text(tr('双语字幕'))),
-                      ButtonSegment(value: 1, label: Text(tr('实时纪要'))),
-                    ],
-                    selected: {pane},
-                    onSelectionChanged: (v) => setState(() => pane = v.first),
-                  ),
-                ),
-                if (widget.onOverlay != null)
-                  IconButton(
-                    tooltip: tr('悬浮字幕'),
-                    onPressed: widget.onOverlay,
-                    visualDensity: VisualDensity.compact,
-                    icon: const Icon(
-                      Icons.picture_in_picture_alt_rounded,
-                      size: 20,
-                    ),
-                  ),
-                if (widget.onModeChanged != null)
-                  PopupMenuButton<String>(
-                    tooltip: tr('字幕显示'),
-                    onSelected: widget.onModeChanged,
-                    itemBuilder: (_) => [
-                      PopupMenuItem(value: 'both', child: Text(tr('原文与译文'))),
-                      PopupMenuItem(value: 'source', child: Text(tr('仅原文'))),
-                      PopupMenuItem(
-                        value: 'translation',
-                        child: Text(tr('仅译文')),
-                      ),
-                    ],
-                  ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          Expanded(
-            child: IndexedStack(
-              index: pane,
-              children: [
-                CaptionFeed(
-                  key: ValueKey('captions-${widget.record['id']}'),
-                  record: widget.record,
-                  settings: widget.settings,
-                ),
-                DigestFeed(
-                  key: ValueKey('digest-${widget.record['id']}'),
-                  record: widget.record,
-                  settings: widget.settings,
-                  history: widget.saved,
-                ),
-              ],
-            ),
-          ),
-          if (widget.saved)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 4, 8, 10),
-              child: recordingActions(constraints.maxHeight < 260),
-            ),
-        ],
+  Widget feeds() => IndexedStack(
+    index: widget.selectedPane ?? pane,
+    children: [
+      CaptionFeed(
+        key: ValueKey('captions-${widget.record['id']}'),
+        record: widget.record,
+        settings: widget.settings,
+        dense: widget.selectedPane != null,
+        bottomInset: widget.bottomInset,
       ),
-    ),
+      DigestFeed(
+        key: ValueKey('digest-${widget.record['id']}'),
+        record: widget.record,
+        settings: widget.settings,
+        history: widget.saved,
+        bottomInset: widget.bottomInset,
+      ),
+    ],
   );
+
+  @override
+  Widget build(BuildContext context) => widget.selectedPane != null
+      ? feeds()
+      : LayoutBuilder(
+          builder: (context, constraints) => Card(
+            margin: EdgeInsets.zero,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 6, 10),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: SegmentedButton<int>(
+                          showSelectedIcon: false,
+                          style: const ButtonStyle(
+                            visualDensity: VisualDensity.compact,
+                            padding: WidgetStatePropertyAll(
+                              EdgeInsets.symmetric(horizontal: 8),
+                            ),
+                            textStyle: WidgetStatePropertyAll(
+                              TextStyle(fontSize: 12),
+                            ),
+                          ),
+                          segments: [
+                            ButtonSegment(value: 0, label: Text(tr('双语字幕'))),
+                            ButtonSegment(value: 1, label: Text(tr('实时纪要'))),
+                          ],
+                          selected: {pane},
+                          onSelectionChanged: (v) =>
+                              setState(() => pane = v.first),
+                        ),
+                      ),
+                      if (widget.onModeChanged != null)
+                        PopupMenuButton<String>(
+                          tooltip: tr('字幕显示'),
+                          onSelected: widget.onModeChanged,
+                          itemBuilder: (_) => [
+                            PopupMenuItem(
+                              value: 'both',
+                              child: Text(tr('原文与译文')),
+                            ),
+                            PopupMenuItem(
+                              value: 'source',
+                              child: Text(tr('仅原文')),
+                            ),
+                            PopupMenuItem(
+                              value: 'translation',
+                              child: Text(tr('仅译文')),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(child: feeds()),
+                if (widget.saved)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 10),
+                    child: recordingActions(constraints.maxHeight < 260),
+                  ),
+              ],
+            ),
+          ),
+        );
 }
 
 class DigestFeed extends StatefulWidget {
@@ -188,9 +192,11 @@ class DigestFeed extends StatefulWidget {
     required this.record,
     required this.settings,
     this.history = false,
+    this.bottomInset = 0,
   });
   final Map<String, dynamic> record, settings;
   final bool history;
+  final double bottomInset;
   @override
   State<DigestFeed> createState() => _DigestFeedState();
 }
@@ -254,7 +260,7 @@ class _DigestFeedState extends State<DigestFeed> {
     if (sections.isEmpty) {
       return Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + widget.bottomInset),
           child: Text(
             tr('实时纪要将在这里整理\n字幕继续在“双语字幕”页更新'),
             textAlign: TextAlign.center,
@@ -264,7 +270,7 @@ class _DigestFeedState extends State<DigestFeed> {
       );
     }
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + widget.bottomInset),
       children: [
         if (status == 'preparing' || status == 'translating')
           Padding(

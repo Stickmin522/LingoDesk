@@ -37,9 +37,16 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(const DeskApp());
       await tester.pumpAndSettle();
-      expect(find.text('开始录音'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-      await tester.tap(find.text('设置').last);
+      final portraitPhone = size.width < 720 && size.width <= size.height;
+      expect(
+        portraitPhone ? find.byTooltip('开始录音') : find.text('开始录音'),
+        findsOneWidget,
+      );
+      if (portraitPhone) {
+        await tester.tap(find.byKey(const ValueKey('capture-options')));
+      } else {
+        await tester.tap(find.text('设置').last);
+      }
       await tester.pumpAndSettle();
       expect(find.text('连接与显示'), findsOneWidget);
       expect(tester.takeException(), isNull);

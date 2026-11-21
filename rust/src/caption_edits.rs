@@ -91,6 +91,7 @@ impl<'a> Edit<'a> {
 pub(super) fn render(raw: &View) -> View {
     let mut rendered = raw.clone();
     if raw.caption_edits.caption.is_empty() && raw.caption_edits.segment.is_empty() {
+        super::speakers::number_for_display(&mut rendered);
         return rendered;
     }
     let mut counts = BTreeMap::new();
@@ -185,6 +186,7 @@ pub(super) fn render(raw: &View) -> View {
     }
     segments.sort_by_key(|s| s.start_ms.unwrap_or(u64::MAX));
     rendered.segments = segments;
+    super::speakers::number_for_display(&mut rendered);
     rendered
 }
 
@@ -703,7 +705,7 @@ mod tests {
         assert_eq!(rendered.captions[0].segment.text, " User correction\n ");
         assert_eq!(rendered.captions[0].segment.translation, "人工译文");
         assert_eq!(rendered.segments[0].start_ms, Some(100));
-        assert_eq!(rendered.segments[0].speaker, "1.A");
+        assert_eq!(rendered.segments[0].speaker, "1");
     }
 
     #[test]
@@ -739,7 +741,7 @@ mod tests {
             rendered
                 .segments
                 .iter()
-                .all(|s| s.start_ms == Some(1200) && s.end_ms == Some(2600) && s.speaker == "1.A")
+                .all(|s| s.start_ms == Some(1200) && s.end_ms == Some(2600) && s.speaker == "1")
         );
         let text = transcript(&rendered);
         assert!(text.contains("Edited first."));

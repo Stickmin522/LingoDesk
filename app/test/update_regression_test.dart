@@ -64,7 +64,7 @@ void main() {
     await tester.pumpWidget(const DeskApp());
     await tester.pumpAndSettle();
     expect(
-      Theme.of(tester.element(find.text('开始录音'))).colorScheme.primary,
+      Theme.of(tester.element(find.byType(DeskHome))).colorScheme.primary,
       const Color(0xff245ce8),
     );
     await tester.pumpWidget(const SizedBox());
@@ -184,7 +184,7 @@ void main() {
     }
 
     await emit(2000);
-    await tester.tap(find.text('记录').last);
+    await tester.tap(find.byTooltip('记录'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('以前的录音'));
     await tester.pumpAndSettle();
@@ -199,7 +199,7 @@ void main() {
     expect(find.byType(HistoryDetail), findsNothing);
     expect(find.text('00:00:10'), findsOneWidget);
     expect(calls.contains('stop'), isFalse);
-    await tester.tap(find.text('停止录音'));
+    await tester.tap(find.byTooltip('停止录音'));
     await tester.pumpAndSettle();
     expect(calls.where((c) => c == 'stop').length, 1);
     await tester.pumpWidget(const SizedBox());

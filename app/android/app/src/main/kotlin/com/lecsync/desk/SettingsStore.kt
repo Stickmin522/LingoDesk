@@ -49,11 +49,6 @@ object SettingsStore {
     }
     fun read(c: Context): JSONObject {
         val p = prefs(c)
-        if(p.getInt("overlaySchema",0)<2){
-            val edit=p.edit().putInt("overlaySchema",2)
-            if(android.provider.Settings.canDrawOverlays(c))edit.putBoolean("overlay",true)
-            edit.commit()
-        }
         val key = runCatching { readKey(c) }.getOrDefault("")
         return JSONObject().put("uiLanguage",p.getString("uiLanguage","system"))
             .put("effectiveLocale",AppLanguages.resolve(c,p.getString("uiLanguage","system")?:"system"))
@@ -63,7 +58,8 @@ object SettingsStore {
             .put("captionMode", p.getString("captionMode", "both")).put("theme", p.getString("theme", "system"))
             .put("device", p.getString("device", "default")).put("fontSize", p.getInt("fontSize", 20))
             .put("speakers", p.getBoolean("speakers", true)).put("digest", p.getBoolean("digest", true))
-            .put("enhance", p.getBoolean("enhance", true)).put("overlay", p.getBoolean("overlay", false))
+            .put("enhance", p.getBoolean("enhance", true)).put("overlay", p.getBoolean("overlay", true))
+            .put("overlayPermission", android.provider.Settings.canDrawOverlays(c))
             .put("overlayX",p.getFloat("overlayX",12f)).put("overlayY",p.getFloat("overlayY",90f)).put("overlayWidth",p.getFloat("overlayWidth",280f)).put("overlayHeight",p.getFloat("overlayHeight",180f))
     }
     fun config(c: Context, title: String = ""): JSONObject = read(c).put("apiKey", readKey(c)).put("title", title).put("directory", directory(c))

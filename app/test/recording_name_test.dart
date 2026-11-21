@@ -231,24 +231,22 @@ void main() {
   });
 
   testWidgets(
-    'recording settings name remains enabled and opens the same editor',
+    'settings has no recording submenu and the current name is editable from home',
     (tester) async {
       await showHome(tester);
-      await tester.tap(find.byTooltip(tr('录音设置')));
+      await tester.tap(find.byKey(const ValueKey('capture-options')));
       await tester.pumpAndSettle();
-      final field = find.byType(TextField);
-      expect(tester.widget<TextField>(field).enabled, isNot(false));
-      await tester.tap(field);
+      expect(find.byType(SettingsPage), findsOneWidget);
+      expect(find.text(tr('录音设置')), findsNothing);
+      await tester.tap(find.text(tr('听译')));
       await tester.pumpAndSettle();
-      await tester.enterText(getNameField(), '设置中的新名称');
+      await openName(tester);
+      await tester.enterText(getNameField(), '主页中的新名称');
       await tester.tap(saveButton());
       await tester.pumpAndSettle();
       expect(renames.single['id'], '1001');
-      expect(current['title'], '设置中的新名称');
-      expect(
-        tester.widget<TextField>(find.byType(TextField)).controller!.text,
-        '设置中的新名称',
-      );
+      expect(current['title'], '主页中的新名称');
+      expect(find.text('主页中的新名称'), findsOneWidget);
       expectNoRecordingControl();
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
@@ -259,7 +257,7 @@ void main() {
     'rename history during a different live recording refreshes list without changing current name',
     (tester) async {
       await showHome(tester);
-      await tester.tap(find.text(tr('记录')).last);
+      await tester.tap(find.byTooltip(tr('记录')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('以前的录音'));
       await tester.pumpAndSettle();

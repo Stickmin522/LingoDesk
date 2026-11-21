@@ -123,27 +123,22 @@ void main() {
       tester.view.physicalSize = const Size(320, 640);
       await tester.pumpWidget(DeskApp(key: ValueKey('main-$selectedLocale')));
       await tester.pumpAndSettle();
-      expect(find.text(tr('开始录音')), findsOneWidget, reason: selectedLocale);
+      expect(
+        find.byTooltip(tr('开始录音')),
+        findsOneWidget,
+        reason: selectedLocale,
+      );
       expect(tester.takeException(), isNull, reason: '$selectedLocale main');
       final homeContext = tester.element(find.byType(DeskHome));
       expect(
         Directionality.of(homeContext),
         AppStrings.rtl ? TextDirection.rtl : TextDirection.ltr,
       );
-      await tester.tap(find.byTooltip(tr('录音设置')));
-      await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('language-left')), findsOneWidget);
       expect(find.byKey(const ValueKey('language-right')), findsOneWidget);
-      expect(
-        tester.takeException(),
-        isNull,
-        reason: '$selectedLocale controls',
-      );
-      Navigator.of(tester.element(find.byKey(const ValueKey('language-left'))))
-          .pop();
+      await tester.tap(find.byKey(const ValueKey('capture-options')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text(tr('设置')).last);
-      await tester.pumpAndSettle();
+      expect(find.byType(SettingsPage), findsOneWidget);
       expect(
         tester.takeException(),
         isNull,

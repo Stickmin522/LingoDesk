@@ -1,6 +1,6 @@
-//! Display rows follow the supplied web client's append-only caption model.
-//! Final/export segments remain separate from speculative streaming text.
-use super::{Segment, View, string};
+//! Keeps live captions separate from the final segments used for exports.
+//! Live text can change as recognition and translation continue.
+use super::{Segment, View, speakers, string};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -296,6 +296,70 @@ fn new_row(v: &mut View, run: u64) -> Caption {
         ..Caption::default()
     }
 }
+fn paragraph_previews(paragraph: &Value, run: u64) -> Vec<Preview> {
+    let speaker = speakers::from_event(paragraph, run);
+    let mut current_speaker = speaker.clone();
+    let mut rows: Vec<Preview> = Vec::new();
+    let paragraph_translation = string(&paragraph["translation"]);
+    if let Some(pieces) = paragraph["pieces"].as_array() {
+        for piece in pieces {
+            let id = speakers::from_event(piece, run);
+            if !id.is_empty() {
+                current_speaker = id;
+            }
+            if rows.last().is_none_or(|r| r.speaker != current_speaker) {
+                rows.push(Preview {
+                    text: String::new(),
+                    translation: String::new(),
+                    speaker: current_speaker.clone(),
+                    role: "paragraph".into(),
+                    caption_id: None,
+                });
+            }
+            let row = rows.last_mut().unwrap();
+            row.text.push_str(&string(&piece["text"]));
+            row.translation.push_str(&string(&piece["translation"]));
+        }
+        rows.retain(|r| !r.text.is_empty() || !r.translation.is_empty());
+    }
+    if rows.len() <= 1 {
+        let mut row = rows.pop().unwrap_or_else(|| Preview {
+            text: string(&paragraph["text"]),
+            translation: String::new(),
+            speaker,
+            role: "paragraph".into(),
+            caption_id: None,
+        });
+        if !paragraph_translation.is_empty() {
+            row.translation = paragraph_translation;
+        }
+        return (!row.text.is_empty() || !row.translation.is_empty())
+            .then_some(row)
+            .into_iter()
+            .collect();
+    }
+    if paragraph_translation.is_empty() {
+        return rows;
+    }
+
+    let translations: Vec<_> = rows.iter().map(|r| r.translation.clone()).collect();
+    if let Some(parts) = split_existing(&paragraph_translation, &translations, true) {
+        for (row, part) in rows.iter_mut().zip(parts) {
+            row.translation = part;
+        }
+        rows
+    } else {
+        // The combined translation has no reliable boundary between speakers.
+        vec![Preview {
+            text: rows.iter().map(|r| r.text.as_str()).collect(),
+            translation: paragraph_translation,
+            speaker: String::new(),
+            role: "paragraph".into(),
+            caption_id: None,
+        }]
+    }
+}
+
 pub fn transcript_preview(v: &mut View, msg: &Value, run: u64) {
     let previous: Vec<_> = v
         .captions
@@ -306,29 +370,20 @@ pub fn transcript_preview(v: &mut View, msg: &Value, run: u64) {
     let mut incoming = Vec::new();
     if let Some(paragraphs) = msg["paragraphs"].as_array() {
         for p in paragraphs {
-            let text = p["pieces"]
-                .as_array()
-                .map(|xs| xs.iter().map(|x| string(&x["text"])).collect::<String>())
-                .unwrap_or_default();
-            let translation = string(&p["translation"]);
-            if !text.is_empty() || !translation.is_empty() {
-                incoming.push(Preview {
-                    text,
-                    translation,
-                    speaker: string(&p["speaker"]),
-                    role: "paragraph".into(),
-                    caption_id: None,
-                });
-            }
+            incoming.extend(paragraph_previews(p, run));
         }
     }
-    let tail = string(&msg["tail"]);
+    let tail = super::digest_text(&msg["tail"]);
     let translated = string(&msg["tailTranslation"]);
     if !tail.is_empty() || !translated.is_empty() {
+        let mut speaker = speakers::from_event(&msg["tail"], run);
+        if speaker.is_empty() {
+            speaker = speakers::from_value(&msg["tailSpeaker"], run);
+        }
         incoming.push(Preview {
             text: tail,
             translation: translated,
-            speaker: String::new(),
+            speaker,
             role: "tail".into(),
             caption_id: None,
         });
@@ -343,7 +398,7 @@ pub fn transcript_preview(v: &mut View, msg: &Value, run: u64) {
             incoming.push(Preview {
                 text,
                 translation: String::new(),
-                speaker: string(&msg["speaker"]),
+                speaker: speakers::from_event(msg, run),
                 role: "flat".into(),
                 caption_id: None,
             });
@@ -352,7 +407,10 @@ pub fn transcript_preview(v: &mut View, msg: &Value, run: u64) {
     v.structured_preview |= msg["paragraphs"].is_array() || msg.get("tailTranslation").is_some();
     let mut expanded = Vec::new();
     for p in &incoming {
-        if let Some((group, parts)) = merged(&p.text, &previous, incoming.len() < previous.len()) {
+        let same_speaker = |row: &Caption| speakers::compatible(&p.speaker, &row.segment.speaker);
+        if let Some((group, parts)) = merged(&p.text, &previous, incoming.len() < previous.len())
+            .filter(|(group, _)| group.iter().all(same_speaker))
+        {
             let translations = split_existing(
                 &p.translation,
                 &group
@@ -396,11 +454,10 @@ pub fn transcript_preview(v: &mut View, msg: &Value, run: u64) {
         previous.iter().map(|r| r.segment.id.clone()).collect();
     let mut cursor = 0;
     for (position, p) in incoming.iter().enumerate() {
+        speakers::remember(v, &p.speaker);
         let compatible = |r: &Caption| {
             available.contains(&r.segment.id)
-                && (p.speaker.is_empty()
-                    || r.segment.speaker.is_empty()
-                    || p.speaker == r.segment.speaker)
+                && speakers::compatible(&p.speaker, &r.segment.speaker)
                 && (r.segment_id.is_none()
                     || (p.role != "flat" && similarity(source(r), &p.text) == 2.0))
         };
@@ -454,9 +511,7 @@ pub fn transcript_preview(v: &mut View, msg: &Value, run: u64) {
                 if row.segment_id.is_none()
                     && available.contains(&row.segment.id)
                     && (similarity(source(row), &p.text) >= 0.5 || previous.len() == 1)
-                    && (p.speaker.is_empty()
-                        || row.segment.speaker.is_empty()
-                        || p.speaker == row.segment.speaker)
+                    && speakers::compatible(&p.speaker, &row.segment.speaker)
                 {
                     matched = Some(row);
                 }
@@ -500,10 +555,12 @@ pub fn translation_preview(v: &mut View, msg: &Value, run: u64) {
         return;
     }
     let src = string(&msg["sourceText"]);
+    let speaker = speakers::from_event(msg, run);
+    let compatible = |row: &Caption| speakers::compatible(&speaker, &row.segment.speaker);
     let current: Vec<_> = v
         .captions
         .iter()
-        .filter(|r| r.run == run)
+        .filter(|r| r.run == run && compatible(r))
         .cloned()
         .collect();
     if let Some((group, _)) = merged(&src, &current, false) {
@@ -536,7 +593,7 @@ pub fn translation_preview(v: &mut View, msg: &Value, run: u64) {
         for r in v
             .captions
             .iter()
-            .filter(|r| r.run == run && !r.translation_final)
+            .filter(|r| r.run == run && !r.translation_final && compatible(r))
         {
             let score = similarity(&r.segment.text, &src);
             if score >= 0.5 && score >= best {
@@ -555,13 +612,17 @@ pub fn translation_preview(v: &mut View, msg: &Value, run: u64) {
             return;
         }
         if pending == 0 {
-            transcript_preview(v, &serde_json::json!({"text":src}), run);
+            transcript_preview(
+                v,
+                &serde_json::json!({"text":src, "speaker":msg["speaker"], "speakerId":msg["speakerId"]}),
+                run,
+            );
         }
         id = v
             .captions
             .iter()
             .rev()
-            .find(|r| r.run == run && r.provisional && r.in_preview)
+            .find(|r| r.run == run && r.provisional && r.in_preview && compatible(r))
             .map(|r| r.segment.id.clone());
     }
     if let Some(r) = id.and_then(|id| v.captions.iter_mut().find(|r| r.segment.id == id)) {
@@ -569,6 +630,10 @@ pub fn translation_preview(v: &mut View, msg: &Value, run: u64) {
             r.segment.text = src;
         }
         r.segment.translation = text;
+        if r.segment.speaker.is_empty() {
+            r.segment.speaker.clone_from(&speaker);
+            speakers::remember(v, &speaker);
+        }
     }
     with_preview(v);
 }
@@ -595,6 +660,12 @@ pub fn final_caption(v: &mut View, s: &Segment, kind: &str, run: u64) {
         }
     });
     if let Some(group) = group {
+        let mut known_speakers = group
+            .iter()
+            .map(|row| row.segment.speaker.as_str())
+            .filter(|id| !id.is_empty());
+        let first = known_speakers.next().unwrap_or_default();
+        let multiple_speakers = known_speakers.any(|id| id != first);
         let sources = merged.map(|x| x.1).or_else(|| {
             split_existing(
                 &s.text,
@@ -624,6 +695,14 @@ pub fn final_caption(v: &mut View, s: &Segment, kind: &str, run: u64) {
                 let id = row.segment.id.clone();
                 row.segment = s.clone();
                 row.segment.id = id;
+                if multiple_speakers
+                    || s.speaker.is_empty()
+                    || (old.source_final
+                        && !old.segment.speaker.is_empty()
+                        && kind == "translation.final")
+                {
+                    row.segment.speaker.clone_from(&old.segment.speaker);
+                }
                 row.segment.text = sources.as_ref().map(|p| p[i].clone()).unwrap_or(old_source);
                 row.preview_text = row.segment.text.clone();
                 row.segment.translation = translated
@@ -643,7 +722,9 @@ pub fn final_caption(v: &mut View, s: &Segment, kind: &str, run: u64) {
     if id.is_none() {
         let pending: Vec<_> = candidates
             .iter()
-            .filter(|r| r.segment_id.is_none())
+            .filter(|r| {
+                r.segment_id.is_none() && speakers::compatible(&r.segment.speaker, &s.speaker)
+            })
             .collect();
         let mut best = 0.0;
         for r in &pending {
@@ -656,7 +737,15 @@ pub fn final_caption(v: &mut View, s: &Segment, kind: &str, run: u64) {
         }
         if best < 0.5 {
             id = if kind == "transcript.final" {
-                pending.first().map(|r| r.segment.id.clone())
+                // A final event can correct the label of a matching preview.
+                let text = normalize(&s.text);
+                let mut exact = candidates.iter().filter(|r| {
+                    r.segment_id.is_none() && !text.is_empty() && normalize(source(r)) == text
+                });
+                match (exact.next(), exact.next()) {
+                    (Some(row), None) => Some(row.segment.id.clone()),
+                    _ => pending.first().map(|r| r.segment.id.clone()),
+                }
             } else {
                 None
             };
@@ -675,6 +764,7 @@ pub fn final_caption(v: &mut View, s: &Segment, kind: &str, run: u64) {
     let local_id = row.segment.id.clone();
     let old_text = row.segment.text.clone();
     let old_translation = row.segment.translation.clone();
+    let old_speaker = row.segment.speaker.clone();
     row.segment = s.clone();
     row.segment.id = local_id;
     if row.segment.text.is_empty() {
@@ -682,6 +772,11 @@ pub fn final_caption(v: &mut View, s: &Segment, kind: &str, run: u64) {
     }
     if row.segment.translation.is_empty() {
         row.segment.translation = old_translation;
+    }
+    if !old_speaker.is_empty()
+        && (row.segment.speaker.is_empty() || (row.source_final && kind == "translation.final"))
+    {
+        row.segment.speaker = old_speaker;
     }
     row.segment_id = Some(s.id.clone());
     row.provisional = false;

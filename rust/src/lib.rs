@@ -4,6 +4,7 @@ mod connection_errors;
 mod drafts;
 mod languages;
 mod record_edits;
+mod speakers;
 mod text_translation;
 mod transport;
 use jni::{
@@ -56,6 +57,8 @@ struct View {
     level: f64,
     segments: Vec<Segment>,
     captions: Vec<captions::Caption>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    speaker_order: Vec<String>,
     caption_edits: caption_edits::Edits,
     next_caption_id: u64,
     structured_preview: bool,
@@ -436,6 +439,12 @@ fn receive(view: &Arc<Mutex<View>>, timeline: &mut Timeline, msg: &Value) {
                     });
                     v.segments.len() - 1
                 });
+            let is_transcript = msg["type"] == "transcript.final";
+            let speaker = speakers::from_event(msg, timeline.run);
+            if !speaker.is_empty() && (is_transcript || v.segments[pos].speaker.is_empty()) {
+                speakers::remember(v, &speaker);
+                v.segments[pos].speaker = speaker;
+            }
             let s = &mut v.segments[pos];
             if let Some(n) = msg["startMs"].as_u64() {
                 s.start_ms = Some(n + timeline.offset)
@@ -443,10 +452,7 @@ fn receive(view: &Arc<Mutex<View>>, timeline: &mut Timeline, msg: &Value) {
             if let Some(n) = msg["endMs"].as_u64() {
                 s.end_ms = Some(n + timeline.offset)
             }
-            if !msg["speaker"].is_null() {
-                s.speaker = format!("{}.{}", timeline.run, string(&msg["speaker"]))
-            }
-            if msg["type"] == "transcript.final" {
+            if is_transcript {
                 s.text = string(&msg["text"]);
             } else {
                 if s.text.is_empty() {
@@ -670,10 +676,15 @@ fn transcript(v: &View) -> String {
         Box::new(v.segments.iter())
     };
     for s in segments {
+        let speaker = if s.speaker.is_empty() {
+            String::new()
+        } else {
+            format!(" 说话人 {}", s.speaker)
+        };
         out.push_str(&format!(
-            "[{}] 说话人 {}\n{}\n{}\n\n",
+            "[{}]{}\n{}\n{}\n\n",
             timestamp(s.start_ms.unwrap_or(0)),
-            s.speaker,
+            speaker,
             s.text,
             s.translation
         ))
@@ -1103,6 +1114,126 @@ mod tests {
         let v = v.lock().unwrap();
         assert_eq!(v.segments.len(), 1);
         assert_eq!(v.segments[0].translation, "你好");
+    }
+    #[test]
+    fn four_speakers_keep_the_same_numbers_through_preview_and_final() {
+        let v = Arc::new(Mutex::new(View::idle()));
+        let mut t = Timeline {
+            run: 1,
+            ..Timeline::default()
+        };
+        receive(
+            &v,
+            &mut t,
+            &json!({
+                "type": "transcript.partial",
+                "paragraphs": [
+                    {
+                        "pieces": [
+                            {"text": "First.", "speaker": "speaker0"},
+                            {"text": "Second.", "speaker": "speaker1"},
+                            {"text": "Third.", "speakerId": 2}
+                        ],
+                        "translation": "第一句。第二句。第三句。"
+                    },
+                    {"pieces": [{"text": "Fourth."}], "speaker": {"id": "speaker3"}}
+                ]
+            }),
+        );
+        let rendered_speakers = || {
+            caption_edits::render(&v.lock().unwrap())
+                .captions
+                .into_iter()
+                .map(|row| row.segment.speaker)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(rendered_speakers(), ["1", "2", "3", "4"]);
+        for (index, text) in ["First.", "Second.", "Third.", "Fourth."]
+            .into_iter()
+            .enumerate()
+        {
+            receive(
+                &v,
+                &mut t,
+                &json!({"type":"transcript.final","segmentId":index,"text":text,"speaker":index}),
+            );
+        }
+        receive(
+            &v,
+            &mut t,
+            &json!({
+                "type":"translation.final", "segmentId":2, "text":"第三句。",
+                "speaker":"speaker0"
+            }),
+        );
+        let rendered = caption_edits::render(&v.lock().unwrap());
+        assert_eq!(rendered_speakers(), ["1", "2", "3", "4"]);
+        assert!(rendered.captions.iter().all(|row| !row.provisional));
+        let exported = transcript(&rendered);
+        for number in 1..=4 {
+            assert!(exported.contains(&format!("说话人 {number}\n")));
+        }
+        assert!(!exported.contains("speaker0"));
+    }
+    #[test]
+    fn merged_final_does_not_replace_distinct_speakers() {
+        let v = Arc::new(Mutex::new(View::idle()));
+        let mut t = Timeline {
+            run: 1,
+            ..Timeline::default()
+        };
+        receive(
+            &v,
+            &mut t,
+            &json!({"type":"transcript.partial","paragraphs":[
+                {"pieces":[{"text":"One."}],"speaker":"speaker0"},
+                {"pieces":[{"text":"Two."}],"speaker":"speaker1"},
+                {"pieces":[{"text":"Three."}],"speaker":"speaker2"},
+                {"pieces":[{"text":"Four."}],"speaker":"speaker3"}
+            ]}),
+        );
+        receive(
+            &v,
+            &mut t,
+            &json!({"type":"transcript.final","segmentId":"combined",
+                "text":"One. Two. Three. Four.","speaker":"speaker0"}),
+        );
+        let rendered = caption_edits::render(&v.lock().unwrap());
+        assert_eq!(
+            rendered
+                .captions
+                .iter()
+                .map(|row| row.segment.speaker.as_str())
+                .collect::<Vec<_>>(),
+            ["1", "2", "3", "4"]
+        );
+    }
+    #[test]
+    fn legacy_speaker_labels_align_with_their_session_scope() {
+        let mut record = View::idle();
+        for (i, id) in ["speaker0", "1.speaker1", "1.0", ""]
+            .into_iter()
+            .enumerate()
+        {
+            record.captions.push(captions::Caption {
+                run: 1,
+                segment: Segment {
+                    id: format!("caption-{i}"),
+                    speaker: id.into(),
+                    ..Segment::default()
+                },
+                ..captions::Caption::default()
+            });
+        }
+        let rendered = caption_edits::render(&record);
+        assert_eq!(
+            rendered
+                .captions
+                .iter()
+                .map(|row| row.segment.speaker.as_str())
+                .collect::<Vec<_>>(),
+            ["1", "2", "1", ""]
+        );
     }
     #[test]
     fn resume_offsets_ids_time_and_usage() {
