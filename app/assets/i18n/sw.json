@@ -241,5 +241,9 @@
   "原文超过 2,000 字符，无法自动重译。": "Maandishi asili yanazidi herufi 2,000 na hayawezi kutafsiriwa upya kiotomatiki.",
   "字幕已有新的修改，请重新打开后重试。": "Aya hii ina mabadiliko mapya zaidi. Ifungue tena ili ujaribu upya.",
   "重命名": "Badilisha jina",
-  "记录名称不能为空": "Jina la rekodi haliwezi kuwa tupu"
+  "记录名称不能为空": "Jina la rekodi haliwezi kuwa tupu",
+  "停止录音": "Simamisha kurekodi",
+  "录音尚未保存": "Rekodi haijahifadhiwa",
+  "放弃": "Tupa",
+  "请先停止录音": "Simamisha kurekodi kwanza"
 }

@@ -241,5 +241,9 @@
   "原文超过 2,000 字符，无法自动重译。": "Originalul depășește 2.000 de caractere și nu poate fi retradus automat.",
   "字幕已有新的修改，请重新打开后重试。": "Acest paragraf are modificări mai noi. Redeschideți-l pentru a reîncerca.",
   "重命名": "Redenumește",
-  "记录名称不能为空": "Numele înregistrării nu poate fi gol"
+  "记录名称不能为空": "Numele înregistrării nu poate fi gol",
+  "停止录音": "Oprește înregistrarea",
+  "录音尚未保存": "Înregistrare nesalvată",
+  "放弃": "Renunță",
+  "请先停止录音": "Oprește mai întâi înregistrarea"
 }

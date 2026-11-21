@@ -241,5 +241,9 @@
   "原文超过 2,000 字符，无法自动重译。": "Văn bản gốc vượt quá 2.000 ký tự và không thể tự động dịch lại.",
   "字幕已有新的修改，请重新打开后重试。": "Đoạn này có chỉnh sửa mới hơn. Hãy mở lại để thử lại.",
   "重命名": "Đổi tên",
-  "记录名称不能为空": "Tên bản ghi không được để trống"
+  "记录名称不能为空": "Tên bản ghi không được để trống",
+  "停止录音": "Dừng ghi âm",
+  "录音尚未保存": "Bản ghi chưa được lưu",
+  "放弃": "Bỏ",
+  "请先停止录音": "Dừng ghi âm trước"
 }

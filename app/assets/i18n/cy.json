@@ -241,5 +241,9 @@
   "原文超过 2,000 字符，无法自动重译。": "Mae'r gwreiddiol yn fwy na 2,000 nod ac ni ellir ei ailgyfieithu'n awtomatig.",
   "字幕已有新的修改，请重新打开后重试。": "Mae golygiadau mwy diweddar i'r paragraff hwn. Agorwch ef eto i roi cynnig arall arni.",
   "重命名": "Ailenwi",
-  "记录名称不能为空": "Ni all enw’r recordiad fod yn wag"
+  "记录名称不能为空": "Ni all enw’r recordiad fod yn wag",
+  "停止录音": "Stopio recordio",
+  "录音尚未保存": "Heb gadw’r recordiad",
+  "放弃": "Taflu",
+  "请先停止录音": "Stopiwch y recordiad yn gyntaf"
 }

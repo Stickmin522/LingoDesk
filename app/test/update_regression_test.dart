@@ -199,7 +199,7 @@ void main() {
     expect(find.byType(HistoryDetail), findsNothing);
     expect(find.text('00:00:10'), findsOneWidget);
     expect(calls.contains('stop'), isFalse);
-    await tester.tap(find.text('停止并保存'));
+    await tester.tap(find.text('停止录音'));
     await tester.pumpAndSettle();
     expect(calls.where((c) => c == 'stop').length, 1);
     await tester.pumpWidget(const SizedBox());

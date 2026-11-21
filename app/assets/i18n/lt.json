@@ -241,5 +241,9 @@
   "原文超过 2,000 字符，无法自动重译。": "Originalas viršija 2 000 simbolių ir negali būti automatiškai išverstas iš naujo.",
   "字幕已有新的修改，请重新打开后重试。": "Šioje pastraipoje yra naujesnių pakeitimų. Atverkite ją iš naujo ir bandykite dar kartą.",
   "重命名": "Pervadinti",
-  "记录名称不能为空": "Įrašo pavadinimas negali būti tuščias"
+  "记录名称不能为空": "Įrašo pavadinimas negali būti tuščias",
+  "停止录音": "Sustabdyti įrašymą",
+  "录音尚未保存": "Įrašas neišsaugotas",
+  "放弃": "Atmesti",
+  "请先停止录音": "Pirmiausia sustabdykite įrašymą"
 }

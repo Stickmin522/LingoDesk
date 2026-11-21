@@ -241,5 +241,9 @@
   "原文超过 2,000 字符，无法自动重译。": "El original supera los 2.000 caracteres y no se puede retraducir automáticamente.",
   "字幕已有新的修改，请重新打开后重试。": "Este párrafo tiene cambios nuevos. Ábrelo de nuevo para reintentar.",
   "重命名": "Cambiar nombre",
-  "记录名称不能为空": "El nombre de la grabación no puede estar vacío"
+  "记录名称不能为空": "El nombre de la grabación no puede estar vacío",
+  "停止录音": "Detener grabación",
+  "录音尚未保存": "Grabación sin guardar",
+  "放弃": "Descartar",
+  "请先停止录音": "Detén la grabación primero"
 }

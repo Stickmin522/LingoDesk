@@ -241,5 +241,9 @@
   "原文超过 2,000 字符，无法自动重译。": "Izvirnik presega 2.000 znakov in ga ni mogoče samodejno znova prevesti.",
   "字幕已有新的修改，请重新打开后重试。": "Ta odstavek ima novejše spremembe. Znova ga odprite in poskusite.",
   "重命名": "Preimenuj",
-  "记录名称不能为空": "Ime posnetka ne sme biti prazno"
+  "记录名称不能为空": "Ime posnetka ne sme biti prazno",
+  "停止录音": "Ustavi snemanje",
+  "录音尚未保存": "Posnetek ni shranjen",
+  "放弃": "Zavrzi",
+  "请先停止录音": "Najprej ustavite snemanje"
 }

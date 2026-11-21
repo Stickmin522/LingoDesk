@@ -241,5 +241,9 @@
   "原文超过 2,000 字符，无法自动重译。": "Alkuperäinen teksti ylittää 2 000 merkkiä, eikä sitä voi kääntää automaattisesti uudelleen.",
   "字幕已有新的修改，请重新打开后重试。": "Tässä kappaleessa on uudempia muutoksia. Avaa se uudelleen ja yritä uudestaan.",
   "重命名": "Nimeä uudelleen",
-  "记录名称不能为空": "Tallenteen nimi ei voi olla tyhjä"
+  "记录名称不能为空": "Tallenteen nimi ei voi olla tyhjä",
+  "停止录音": "Lopeta tallennus",
+  "录音尚未保存": "Tallennetta ei ole tallennettu",
+  "放弃": "Hylkää",
+  "请先停止录音": "Lopeta ensin tallennus"
 }

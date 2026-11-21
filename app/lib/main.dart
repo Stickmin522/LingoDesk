@@ -58,7 +58,7 @@ String phaseLabel(String phase) =>
       'recording': tr('正在聆听'),
       'pausing': tr('正在暂停'),
       'paused': tr('录音已暂停'),
-      'stopping': tr('正在保存'),
+      'stopping': tr('正在处理'),
       'ended': tr('已保存'),
     }[phase] ??
     tr('准备就绪');
@@ -240,12 +240,15 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
   final title = TextEditingController();
   int page = 0;
   bool actionBusy = false;
+  String? txtExportedFor;
   String lastError = '';
   StateSetter? sheetRefresh;
   String get phase => state['phase'] as String? ?? 'idle';
   bool get active => !['idle', 'ended'].contains(phase);
   Map<String, dynamic> get record => state;
   bool get hasRecord => (record['id'] as String? ?? '').isNotEmpty;
+  bool get pendingSave => hasRecord && record['pendingSave'] == true;
+  bool get canDiscard => pendingSave && ['stopping', 'ended'].contains(phase);
 
   Future<void> renameCurrent() async {
     final id = record['id'];
@@ -306,13 +309,17 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
         jsonDecode(event as String) as Map,
       );
       if (!mounted) return;
-      final ended = value['phase'] == 'ended' && state['phase'] != 'ended';
+      final saved =
+          value['phase'] == 'ended' &&
+          value['pendingSave'] != true &&
+          (state['phase'] != 'ended' || state['pendingSave'] == true);
+
       if ((value['id'] as String? ?? '').isNotEmpty &&
           (state['id'] != value['id'] || state['title'] != value['title'])) {
         title.text = value['title'] as String? ?? '';
       }
       setState(() => state = value);
-      if (ended) refreshHistory();
+      if (saved) refreshHistory();
       final error = value['error'] as String? ?? '';
       if (error.isNotEmpty && error != lastError) {
         lastError = error;
@@ -519,76 +526,163 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
       ),
     ),
   );
-  Widget toolbar() {
-    final p = phase;
+  Future<void> exportTxt() async {
+    final id = record['id'] as String;
+    setState(() => txtExportedFor = null);
+    final result = await PlatformDesk.call('export', {
+      'id': id,
+      'format': 'txt',
+    });
+    if (mounted && result is Map && result['saved'] == true) {
+      setState(() => txtExportedFor = id);
+    }
+  }
+
+  Future<bool> discardCurrent() async {
+    final result = await PlatformDesk.call('core', {
+      'op': 'discardRecording',
+      'id': record['id'],
+    });
+    return result is Map && result['discarded'] == true;
+  }
+
+  Widget toolbar({required bool compact}) {
     final busy =
-        actionBusy || ['connecting', 'pausing', 'stopping'].contains(p);
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      crossAxisAlignment: WrapCrossAlignment.center,
+        actionBusy || ['connecting', 'pausing', 'stopping'].contains(phase);
+    final (icon, label, task) = switch (phase) {
+      'recording' || 'pausing' || 'connecting' || 'stopping' => (
+        Icons.pause_rounded,
+        '暂停录音',
+        () => PlatformDesk.call('pause'),
+      ),
+      'paused' => (
+        Icons.play_arrow_rounded,
+        '继续录音',
+        () => PlatformDesk.call('resume'),
+      ),
+      'ended' when pendingSave => (
+        Icons.save_outlined,
+        '保存',
+        () async {
+          await PlatformDesk.call('core', {
+            'op': 'saveRecording',
+            'id': record['id'],
+          });
+        },
+      ),
+      _ => (
+        Icons.mic_rounded,
+        '开始录音',
+        () => PlatformDesk.call('start', {
+          'title': title.text.trim().isEmpty ? tr('我的听译记录') : title.text,
+        }),
+      ),
+    };
+    return Row(
       children: [
-        if (!active)
-          FilledButton.icon(
-            onPressed: busy
-                ? null
-                : () => action(() async {
-                    await PlatformDesk.call('start', {
-                      'title': title.text.trim().isEmpty
-                          ? tr('我的听译记录')
-                          : title.text,
-                    });
-                  }),
-            icon: const Icon(Icons.mic_rounded),
-            label: Text(tr('开始录音')),
+        Expanded(
+          child: hasRecord
+              ? recordingButton(
+                  txtExportedFor == record['id']
+                      ? Icons.download_done_rounded
+                      : Icons.download_rounded,
+                  'TXT',
+                  exportTxt,
+                  enabled: !actionBusy,
+                  compact: compact,
+                )
+              : const SizedBox(),
+        ),
+        Expanded(
+          child: recordingButton(
+            icon,
+            label,
+            () async {
+              await task();
+            },
+            enabled: !busy,
+            primary: true,
+            compact: compact,
           ),
-        if (p == 'recording')
-          FilledButton.icon(
-            onPressed: busy
-                ? null
-                : () => action(() async {
-                    await PlatformDesk.call('pause');
-                  }),
-            icon: const Icon(Icons.pause_rounded),
-            label: Text(tr('暂停录音')),
-          ),
-        if (p == 'paused')
-          FilledButton.icon(
-            onPressed: busy
-                ? null
-                : () => action(() async {
-                    await PlatformDesk.call('resume');
-                  }),
-            icon: const Icon(Icons.play_arrow_rounded),
-            label: Text(tr('继续录音')),
-          ),
-        if (active)
-          OutlinedButton.icon(
-            onPressed: actionBusy || p == 'stopping'
-                ? null
-                : () => action(() async {
+        ),
+        Expanded(
+          child: active
+              ? recordingButton(
+                  Icons.stop_rounded,
+                  '停止录音',
+                  () async {
                     await PlatformDesk.call('stop');
-                  }),
-            icon: const Icon(Icons.stop_rounded),
-            label: Text(tr('停止并保存')),
-          ),
-        if (busy)
-          const SizedBox(
-            width: 24,
-            height: 24,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        if (!active)
-          TextButton.icon(
-            onPressed: () => setState(() => page = 2),
-            icon: const Icon(Icons.key_rounded, size: 18),
-            label: Text(
-              widget.settings['hasKey'] == true
-                  ? widget.settings['keyHint'] as String
-                  : tr('连接设置'),
-            ),
-          ),
+                  },
+                  enabled: !actionBusy && phase != 'stopping',
+                  compact: compact,
+                )
+              : pendingSave
+              ? recordingButton(
+                  Icons.delete_outline_rounded,
+                  '放弃',
+                  () async {
+                    await discardCurrent();
+                  },
+                  enabled: !actionBusy,
+                  compact: compact,
+                )
+              : const SizedBox(),
+        ),
       ],
+    );
+  }
+
+  Widget recordingButton(
+    IconData icon,
+    String label,
+    Future<void> Function() task, {
+    required bool enabled,
+    required bool compact,
+    bool primary = false,
+  }) {
+    final onPressed = enabled ? () => action(task) : null;
+    if (compact) {
+      return Center(
+        child: (primary ? FilledButton.icon : TextButton.icon)(
+          onPressed: onPressed,
+          icon: Icon(icon, size: 18),
+          label: Text(tr(label), maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
+      );
+    }
+    final colors = Theme.of(context).colorScheme;
+    return Center(
+      child: TextButton(
+        onPressed: onPressed,
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (primary)
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: enabled
+                      ? colors.primary
+                      : colors.surfaceContainerHighest,
+                ),
+                child: Icon(
+                  icon,
+                  size: 29,
+                  color: enabled ? colors.onPrimary : colors.onSurfaceVariant,
+                ),
+              )
+            else
+              Icon(icon, size: 24),
+            const SizedBox(height: 3),
+            Text(tr(label), maxLines: 1, overflow: TextOverflow.ellipsis),
+          ],
+        ),
+      ),
     );
   }
 
@@ -606,7 +700,7 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
       }
     }),
     onError: showError,
-    saved: !active && (record['id'] as String? ?? '').isNotEmpty,
+    saved: phase == 'ended' && hasRecord && !pendingSave,
   );
 
   Widget capture() => LayoutBuilder(
@@ -662,7 +756,9 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
                   borderRadius: BorderRadius.circular(30),
                 ),
                 child: Text(
-                  phaseLabel(phase),
+                  phase == 'ended' && pendingSave
+                      ? tr('录音尚未保存')
+                      : phaseLabel(phase),
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
@@ -683,17 +779,20 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
                 ),
             ],
           ),
-          const SizedBox(height: 12),
-          toolbar(),
-          const SizedBox(height: 14),
+          const SizedBox(height: 8),
           if ((record['warning'] as String? ?? '').isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: Text(
-                tr(record['warning'] as String),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).colorScheme.tertiary,
+              child: Tooltip(
+                message: tr(record['warning'] as String),
+                child: Text(
+                  tr(record['warning'] as String),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.tertiary,
+                  ),
                 ),
               ),
             ),
@@ -707,6 +806,8 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
               ),
             ),
           Expanded(child: subtitles()),
+          const SizedBox(height: 6),
+          toolbar(compact: compact),
         ],
       );
       if (side) {
@@ -732,7 +833,7 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
                 child: hasRecord
                     ? nameButton
                     : Text(
-                        tr('让声音，成为文字。'),
+                        tr('听译台'),
                         style: const TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w700,
@@ -884,92 +985,102 @@ class _DeskHomeState extends State<DeskHome> with WidgetsBindingObserver {
     ],
   );
   @override
-  Widget build(BuildContext context) => Scaffold(
-    body: SafeArea(
-      child: LayoutBuilder(
-        builder: (context, c) {
-          final wide = c.maxWidth >= 720;
-          final content = Padding(
-            padding: EdgeInsets.all(wide ? 24 : 16),
-            child: switch (page) {
-              1 => historyPage(),
-              2 => SettingsPage(
-                settings: widget.settings,
-                active: active,
-                save: save,
-                onError: showError,
-              ),
-              _ =>
-                MediaQuery.of(context).displayFeatures.any(
-                      (f) =>
-                          f.bounds.height > 0 &&
-                          f.bounds.width > f.bounds.height,
-                    )
-                    ? DisplayFeatureSubScreen(
-                        anchorPoint: Offset(
-                          MediaQuery.sizeOf(context).width / 2,
-                          0,
-                        ),
-                        child: capture(),
-                      )
-                    : capture(),
-            },
-          );
-          return Row(
-            children: [
-              if (wide)
-                NavigationRail(
-                  scrollable: true,
-                  selectedIndex: page,
-                  onDestinationSelected: (v) => setState(() => page = v),
-                  labelType: NavigationRailLabelType.all,
-                  leading: const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
-                    child: Icon(Icons.graphic_eq_rounded, size: 34),
-                  ),
-                  destinations: [
-                    NavigationRailDestination(
-                      icon: const Icon(Icons.subtitles_outlined),
-                      selectedIcon: const Icon(Icons.subtitles_rounded),
-                      label: Text(tr('听译')),
-                    ),
-                    NavigationRailDestination(
-                      icon: const Icon(Icons.history_rounded),
-                      label: Text(tr('记录')),
-                    ),
-                    NavigationRailDestination(
-                      icon: const Icon(Icons.tune_rounded),
-                      label: Text(tr('设置')),
-                    ),
-                  ],
+  Widget build(BuildContext context) => PopScope<Object?>(
+    canPop: !canDiscard,
+    onPopInvokedWithResult: (didPop, _) {
+      if (!didPop && canDiscard) {
+        action(() async {
+          if (await discardCurrent()) await SystemNavigator.pop();
+        });
+      }
+    },
+    child: Scaffold(
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, c) {
+            final wide = c.maxWidth >= 720;
+            final content = Padding(
+              padding: EdgeInsets.all(wide ? 24 : 16),
+              child: switch (page) {
+                1 => historyPage(),
+                2 => SettingsPage(
+                  settings: widget.settings,
+                  active: active,
+                  save: save,
+                  onError: showError,
                 ),
-              Expanded(child: content),
-            ],
-          );
-        },
+                _ =>
+                  MediaQuery.of(context).displayFeatures.any(
+                        (f) =>
+                            f.bounds.height > 0 &&
+                            f.bounds.width > f.bounds.height,
+                      )
+                      ? DisplayFeatureSubScreen(
+                          anchorPoint: Offset(
+                            MediaQuery.sizeOf(context).width / 2,
+                            0,
+                          ),
+                          child: capture(),
+                        )
+                      : capture(),
+              },
+            );
+            return Row(
+              children: [
+                if (wide)
+                  NavigationRail(
+                    scrollable: true,
+                    selectedIndex: page,
+                    onDestinationSelected: (v) => setState(() => page = v),
+                    labelType: NavigationRailLabelType.all,
+                    leading: const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Icon(Icons.graphic_eq_rounded, size: 34),
+                    ),
+                    destinations: [
+                      NavigationRailDestination(
+                        icon: const Icon(Icons.subtitles_outlined),
+                        selectedIcon: const Icon(Icons.subtitles_rounded),
+                        label: Text(tr('听译')),
+                      ),
+                      NavigationRailDestination(
+                        icon: const Icon(Icons.history_rounded),
+                        label: Text(tr('记录')),
+                      ),
+                      NavigationRailDestination(
+                        icon: const Icon(Icons.tune_rounded),
+                        label: Text(tr('设置')),
+                      ),
+                    ],
+                  ),
+                Expanded(child: content),
+              ],
+            );
+          },
+        ),
       ),
+      bottomNavigationBar: MediaQuery.sizeOf(context).width < 720
+          ? NavigationBar(
+              selectedIndex: page,
+              onDestinationSelected: (v) => setState(() => page = v),
+              destinations: [
+                NavigationDestination(
+                  icon: const Icon(Icons.subtitles_outlined),
+                  selectedIcon: const Icon(Icons.subtitles_rounded),
+                  label: tr('听译'),
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.history_rounded),
+                  label: tr('记录'),
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.tune_rounded),
+                  label: tr('设置'),
+                ),
+              ],
+            )
+          : null,
     ),
-    bottomNavigationBar: MediaQuery.sizeOf(context).width < 720
-        ? NavigationBar(
-            selectedIndex: page,
-            onDestinationSelected: (v) => setState(() => page = v),
-            destinations: [
-              NavigationDestination(
-                icon: const Icon(Icons.subtitles_outlined),
-                selectedIcon: const Icon(Icons.subtitles_rounded),
-                label: tr('听译'),
-              ),
-              NavigationDestination(
-                icon: const Icon(Icons.history_rounded),
-                label: tr('记录'),
-              ),
-              NavigationDestination(
-                icon: const Icon(Icons.tune_rounded),
-                label: tr('设置'),
-              ),
-            ],
-          )
-        : null,
   );
 }
 
@@ -1269,7 +1380,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             const SizedBox(height: 24),
             const Text(
-              'LingoDesk 1.2.4 · Android 10–17 · ARM64',
+              'LingoDesk 1.2.5 · Android 10–17 · ARM64',
               style: TextStyle(fontSize: 12, height: 1.8),
             ),
           ],

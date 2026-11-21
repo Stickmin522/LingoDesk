@@ -241,5 +241,9 @@
   "原文超过 2,000 字符，无法自动重译。": "Izvornik prelazi 2.000 znakova i ne može se automatski ponovno prevesti.",
   "字幕已有新的修改，请重新打开后重试。": "Ovaj odlomak ima novije izmjene. Ponovno ga otvorite i pokušajte.",
   "重命名": "Preimenuj",
-  "记录名称不能为空": "Naziv snimke ne može biti prazan"
+  "记录名称不能为空": "Naziv snimke ne može biti prazan",
+  "停止录音": "Zaustavi snimanje",
+  "录音尚未保存": "Snimka nije spremljena",
+  "放弃": "Odbaci",
+  "请先停止录音": "Prvo zaustavi snimanje"
 }

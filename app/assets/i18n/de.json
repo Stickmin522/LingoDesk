@@ -241,5 +241,9 @@
   "原文超过 2,000 字符，无法自动重译。": "Der Originaltext überschreitet 2.000 Zeichen und kann nicht automatisch neu übersetzt werden.",
   "字幕已有新的修改，请重新打开后重试。": "Dieser Absatz wurde inzwischen geändert. Zum Wiederholen erneut öffnen.",
   "重命名": "Umbenennen",
-  "记录名称不能为空": "Der Aufnahmename darf nicht leer sein"
+  "记录名称不能为空": "Der Aufnahmename darf nicht leer sein",
+  "停止录音": "Aufnahme stoppen",
+  "录音尚未保存": "Aufnahme nicht gespeichert",
+  "放弃": "Verwerfen",
+  "请先停止录音": "Zuerst die Aufnahme stoppen"
 }

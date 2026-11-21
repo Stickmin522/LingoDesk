@@ -241,5 +241,9 @@
   "原文超过 2,000 字符，无法自动重译。": "Orijinal metin 2.000 karakteri aşıyor ve otomatik olarak yeniden çevrilemiyor.",
   "字幕已有新的修改，请重新打开后重试。": "Bu paragrafta daha yeni düzenlemeler var. Yeniden denemek için tekrar açın.",
   "重命名": "Yeniden adlandır",
-  "记录名称不能为空": "Kayıt adı boş olamaz"
+  "记录名称不能为空": "Kayıt adı boş olamaz",
+  "停止录音": "Kaydı durdur",
+  "录音尚未保存": "Kayıt kaydedilmedi",
+  "放弃": "At",
+  "请先停止录音": "Önce kaydı durdurun"
 }

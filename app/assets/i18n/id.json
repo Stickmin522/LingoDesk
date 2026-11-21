@@ -241,5 +241,9 @@
   "原文超过 2,000 字符，无法自动重译。": "Teks asli melebihi 2.000 karakter dan tidak dapat diterjemahkan ulang secara otomatis.",
   "字幕已有新的修改，请重新打开后重试。": "Paragraf ini memiliki perubahan baru. Buka kembali untuk mencoba lagi.",
   "重命名": "Ganti nama",
-  "记录名称不能为空": "Nama rekaman tidak boleh kosong"
+  "记录名称不能为空": "Nama rekaman tidak boleh kosong",
+  "停止录音": "Hentikan rekaman",
+  "录音尚未保存": "Rekaman belum disimpan",
+  "放弃": "Buang",
+  "请先停止录音": "Hentikan rekaman terlebih dahulu"
 }

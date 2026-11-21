@@ -1,6 +1,7 @@
 mod caption_edits;
 mod captions;
 mod connection_errors;
+mod drafts;
 mod languages;
 mod record_edits;
 mod text_translation;
@@ -50,6 +51,7 @@ struct View {
     source: String,
     pair: String,
     phase: String,
+    pending_save: bool,
     duration_ms: u64,
     level: f64,
     segments: Vec<Segment>,
@@ -107,13 +109,26 @@ struct Wave {
     file: BufWriter<File>,
     samples: u64,
     path: PathBuf,
+    temporary: bool,
 }
 impl Wave {
+    #[cfg(test)]
     fn new(path: PathBuf) -> Result<Self, String> {
+        Self::create(path, false)
+    }
+    fn create(path: PathBuf, temporary: bool) -> Result<Self, String> {
         let mut x = Self {
-            file: BufWriter::new(File::create(&path).map_err(|_| "无法创建录音文件")?),
+            file: BufWriter::new(
+                if temporary {
+                    File::create_new(&path)
+                } else {
+                    File::create(&path)
+                }
+                .map_err(|_| "无法创建录音文件")?,
+            ),
             samples: 0,
             path,
+            temporary,
         };
         x.header()?;
         Ok(x)
@@ -160,6 +175,13 @@ impl Wave {
             self.header()?;
         }
         Ok(())
+    }
+}
+impl Drop for Wave {
+    fn drop(&mut self) {
+        if self.temporary {
+            let _ = fs::remove_file(&self.path);
+        }
     }
 }
 enum Control {
@@ -517,7 +539,7 @@ fn finish_stream(socket: &mut Option<Socket>, view: &Arc<Mutex<View>>, t: &mut T
             }
             if Instant::now() > deadline {
                 mutate(view, |v| {
-                    v.warning = "等待末尾字幕超时，已保存当前内容".into()
+                    v.warning = "实时连接已断开，已保留本机录音".into()
                 });
                 break;
             }
@@ -540,11 +562,17 @@ fn save(view: &Arc<Mutex<View>>, directory: &str) -> Result<(), String> {
 }
 // The caller holds FILE_WRITE_LOCK across reading, editing and writing a record.
 fn write_record(v: &View, directory: &str) -> Result<(), String> {
+    if v.pending_save {
+        return Ok(());
+    }
     let path = Path::new(directory).join(format!("{}.json", v.id));
     let tmp = path.with_extension("tmp");
     fs::write(&tmp, serde_json::to_vec(&v).map_err(|_| "字幕编码失败")?)
         .map_err(|_| "字幕保存失败")?;
-    fs::rename(tmp, path).map_err(|_| String::from("字幕保存失败"))
+    fs::rename(&tmp, path).map_err(|_| {
+        let _ = fs::remove_file(tmp);
+        String::from("字幕保存失败")
+    })
 }
 fn worker(
     c: Config,
@@ -636,7 +664,12 @@ fn timestamp(n: u64) -> String {
 }
 fn transcript(v: &View) -> String {
     let mut out = format!("{}\n\n", v.title);
-    for s in &v.segments {
+    let segments: Box<dyn Iterator<Item = &Segment>> = if v.pending_save && !v.captions.is_empty() {
+        Box::new(v.captions.iter().map(|row| &row.segment))
+    } else {
+        Box::new(v.segments.iter())
+    };
+    for s in segments {
         out.push_str(&format!(
             "[{}] 说话人 {}\n{}\n{}\n\n",
             timestamp(s.start_ms.unwrap_or(0)),
@@ -644,6 +677,12 @@ fn transcript(v: &View) -> String {
             s.text,
             s.translation
         ))
+    }
+    if v.pending_save
+        && v.captions.is_empty()
+        && (!v.preview.is_empty() || !v.preview_translation.is_empty())
+    {
+        out.push_str(&format!("{}\n{}\n\n", v.preview, v.preview_translation));
     }
     let sections = if !v.chinese_sections.is_empty() && v.chinese_digest_source == v.sections {
         &v.chinese_sections
@@ -668,6 +707,8 @@ fn command(input: &str) -> Result<Value, String> {
     let op = req["op"].as_str().unwrap_or("");
     match op {
         "snapshot" => Ok(json!(snapshot())),
+        "saveRecording" => drafts::commit(&req),
+        "discardRecording" => drafts::discard(&req),
         "editCaption" => caption_edits::command(&req),
         "rename" => record_edits::rename(&req),
         "retranslateCaption" => caption_edits::retranslate(&req),
@@ -733,18 +774,26 @@ fn command(input: &str) -> Result<Value, String> {
             languages::parse_pair(&c.pair)?;
             let mut engine = ENGINE.lock().map_err(|_| "状态异常")?;
             if let Some(e) = engine.as_ref() {
-                if e.view.lock().map_err(|_| "状态异常")?.phase != "ended" {
+                let v = e.view.lock().map_err(|_| "状态异常")?;
+                if v.phase != "ended" {
                     return Err("已有录音正在运行".into());
                 }
+                if v.pending_save {
+                    return Err("录音尚未保存".into());
+                }
+            } else {
+                drafts::clean_orphans(&c.directory)?;
             }
-            fs::create_dir_all(&c.directory).map_err(|_| "无法创建历史目录")?;
+            let staging = drafts::directory(&c.directory);
+            fs::create_dir_all(&staging).map_err(|_| "无法创建历史目录")?;
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map_err(|_| "系统时间异常")?
                 .as_millis() as u64;
             let id = now.to_string();
-            let wave = Arc::new(Mutex::new(Wave::new(
-                Path::new(&c.directory).join(format!("{id}.wav")),
+            let wave = Arc::new(Mutex::new(Wave::create(
+                staging.join(format!("{id}.wav")),
+                true,
             )?));
             let view = Arc::new(Mutex::new(View {
                 id: id.clone(),
@@ -757,6 +806,7 @@ fn command(input: &str) -> Result<Value, String> {
                 source: c.source.clone(),
                 pair: c.pair.clone(),
                 phase: "recording".into(),
+                pending_save: true,
                 connection: "connecting".into(),
                 audio_path: wave
                     .lock()
@@ -774,7 +824,6 @@ fn command(input: &str) -> Result<Value, String> {
             thread::spawn(move || {
                 let recovery_view = v.clone();
                 let recovery_wave = w.clone();
-                let directory = c.directory.clone();
                 if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     worker(c, rx, frx, v, w)
                 }))
@@ -785,9 +834,9 @@ fn command(input: &str) -> Result<Value, String> {
                     }
                     mutate(&recovery_view, |v| {
                         v.phase = "ended".into();
-                        v.error = "录音线程发生异常，已保留最后保存的内容".into();
+                        v.connection = "closed".into();
+                        v.error = "录音发生错误".into();
                     });
-                    let _ = save(&recovery_view, &directory);
                 }
             });
             *engine = Some(Engine {
@@ -863,7 +912,16 @@ fn command(input: &str) -> Result<Value, String> {
         "load" | "export" | "delete" => {
             let directory = req["directory"].as_str().ok_or("缺少目录")?;
             let id = req["id"].as_str().ok_or("缺少记录 ID")?;
-            let v = load(directory, id)?;
+            let draft = if op == "delete" {
+                None
+            } else {
+                drafts::read(id)?
+            };
+            let is_draft = draft.is_some();
+            let v = match draft {
+                Some(v) => v,
+                None => load(directory, id)?,
+            };
             if op == "load" {
                 return Ok(json!(caption_edits::render(&v)));
             }
@@ -877,6 +935,9 @@ fn command(input: &str) -> Result<Value, String> {
                 return Ok(json!({"ok":true}));
             }
             let format = req["format"].as_str().unwrap_or("txt");
+            if is_draft && format != "txt" {
+                return Err("录音尚未保存".into());
+            }
             let v = caption_edits::render(&v);
             let content = match format {
                 "srt" => srt(&v.segments)?,
@@ -884,7 +945,7 @@ fn command(input: &str) -> Result<Value, String> {
                 _ => transcript(&v),
             };
             Ok(
-                json!({"content":content,"audioPath":v.audio_path,"filename":format!("听译台-{}.{}",v.id,format)}),
+                json!({"content":content,"audioPath":v.audio_path,"filename":format!("听译台-{id}.{format}")}),
             )
         }
         _ => Err("未知操作".into()),

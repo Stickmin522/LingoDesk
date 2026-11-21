@@ -241,5 +241,9 @@
   "原文超过 2,000 字符，无法自动重译。": "Origjinali tejkalon 2 000 karaktere dhe nuk mund të ripërkthehet automatikisht.",
   "字幕已有新的修改，请重新打开后重试。": "Ky paragraf ka ndryshime të reja. Rihapeni për të provuar sërish.",
   "重命名": "Riemërto",
-  "记录名称不能为空": "Emri i regjistrimit nuk mund të jetë bosh"
+  "记录名称不能为空": "Emri i regjistrimit nuk mund të jetë bosh",
+  "停止录音": "Ndalo regjistrimin",
+  "录音尚未保存": "Regjistrimi nuk është ruajtur",
+  "放弃": "Hidhe",
+  "请先停止录音": "Ndalo fillimisht regjistrimin"
 }

@@ -241,5 +241,9 @@
   "原文超过 2,000 字符，无法自动重译。": "Het origineel overschrijdt 2.000 tekens en kan niet automatisch opnieuw worden vertaald.",
   "字幕已有新的修改，请重新打开后重试。": "Deze alinea heeft nieuwere wijzigingen. Open hem opnieuw om het nogmaals te proberen.",
   "重命名": "Naam wijzigen",
-  "记录名称不能为空": "De naam van de opname mag niet leeg zijn"
+  "记录名称不能为空": "De naam van de opname mag niet leeg zijn",
+  "停止录音": "Opname stoppen",
+  "录音尚未保存": "Opname niet opgeslagen",
+  "放弃": "Verwerpen",
+  "请先停止录音": "Stop eerst de opname"
 }

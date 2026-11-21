@@ -91,7 +91,7 @@ class SessionService : Service() {
         if(p!=previousPhase||language!=previousLanguage){previousPhase=p;previousLanguage=language
             if(p=="recording"&&!capturing)startAudio()
             if(p in listOf("paused","ended","stopping","pausing"))stopAudio()
-            if(p=="ended"){releaseProjection();recordingTypes=0;sessionActive=false;destroyOverlay();Bridge.broadcast();stopSelf();return}
+            if(p=="ended" || (p=="idle" && sessionActive)){releaseProjection();recordingTypes=0;sessionActive=false;destroyOverlay();Bridge.broadcast();stopSelf();return}
             else if(sessionActive)foreground(when(p){"recording"->"正在录音与翻译";"paused"->"已暂停 · 不上传音频";"connecting"->"正在连接";else->"正在处理"},recordingTypes)
         }
         refreshOverlay();Bridge.broadcast();handler.postDelayed(this,250)
@@ -227,8 +227,12 @@ class SessionService : Service() {
     }
     private fun destroyOverlay(){hideOverlay();overlayView?.detachFromFlutterEngine();overlayView=null;overlayRoot=null;params=null;overlayOriginalSoftInputMode=null;dockSide=null;expandedGeometry=null;overlayBridge?.close();overlayBridge=null;overlayPlatform?.close();overlayPlatform=null;overlayEngine?.destroy();overlayEngine=null}
     override fun onConfigurationChanged(newConfig:Configuration){super.onConfigurationChanged(newConfig);if(params!=null){normalizeOverlayGeometry();applyOverlayLayout()}}
-    override fun onTaskRemoved(rootIntent:Intent?){refreshOverlay();super.onTaskRemoved(rootIntent)}
-    override fun onDestroy(){handler.removeCallbacksAndMessages(null);stopAudio();if(wake?.isHeld==true)wake?.release();NativeCore.command("{\"op\":\"stop\"}");releaseProjection();destroyOverlay();audioWorker.shutdown();instance=null;super.onDestroy()}
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        NativeCore.command("{\"op\":\"discardRecording\"}")
+        refreshOverlay()
+        super.onTaskRemoved(rootIntent)
+    }
+    override fun onDestroy(){handler.removeCallbacksAndMessages(null);stopAudio();if(wake?.isHeld==true)wake?.release();if(sessionActive)NativeCore.command("{\"op\":\"stop\"}");releaseProjection();destroyOverlay();audioWorker.shutdown();instance=null;super.onDestroy()}
     companion object {@Volatile var instance:SessionService?=null}
 }
 

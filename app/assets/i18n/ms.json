@@ -241,5 +241,9 @@
   "原文超过 2,000 字符，无法自动重译。": "Teks asal melebihi 2,000 aksara dan tidak boleh diterjemah semula secara automatik.",
   "字幕已有新的修改，请重新打开后重试。": "Perenggan ini mempunyai suntingan baharu. Buka semula untuk mencuba lagi.",
   "重命名": "Namakan semula",
-  "记录名称不能为空": "Nama rakaman tidak boleh kosong"
+  "记录名称不能为空": "Nama rakaman tidak boleh kosong",
+  "停止录音": "Hentikan rakaman",
+  "录音尚未保存": "Rakaman belum disimpan",
+  "放弃": "Buang",
+  "请先停止录音": "Hentikan rakaman dahulu"
 }

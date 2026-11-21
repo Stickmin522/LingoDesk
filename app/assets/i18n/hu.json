@@ -241,5 +241,9 @@
   "原文超过 2,000 字符，无法自动重译。": "Az eredeti szöveg meghaladja a 2 000 karaktert, ezért nem fordítható újra automatikusan.",
   "字幕已有新的修改，请重新打开后重试。": "Ez a bekezdés újabb módosításokat tartalmaz. Nyissa meg újra, és próbálja ismét.",
   "重命名": "Átnevezés",
-  "记录名称不能为空": "A felvétel neve nem lehet üres"
+  "记录名称不能为空": "A felvétel neve nem lehet üres",
+  "停止录音": "Felvétel leállítása",
+  "录音尚未保存": "A felvétel nincs mentve",
+  "放弃": "Elvetés",
+  "请先停止录音": "Először állítsa le a felvételt"
 }

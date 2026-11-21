@@ -28,7 +28,6 @@ pub(super) fn run(
     let mut next_attempt = Instant::now();
     let mut retry = 0u32;
     let mut paused = false;
-    let mut last_save = Instant::now();
     loop {
         if let Ok(command) = ctrl.try_recv() {
             match command {
@@ -47,7 +46,11 @@ pub(super) fn run(
                     finish_stream(&mut socket, &view, &mut timeline);
                     paused = true;
                     phase(&view, "paused");
-                    let _ = save(&view, &c.directory);
+                    if let Ok(mut wave) = wave.lock() {
+                        if let Err(error) = wave.header() {
+                            mutate(&view, |v| v.error = error);
+                        }
+                    }
                 }
                 Control::Resume => {
                     paused = false;
@@ -139,7 +142,7 @@ pub(super) fn run(
                         if matches!(e, tungstenite::Error::WriteBufferFull(_)) {
                             mutate(&view, |v| {
                                 v.dropped_frames += 1;
-                                v.warning = "网络拥塞，字幕可能缺失；本机录音继续保存".into();
+                                v.warning = "网络拥塞，字幕可能缺失；本机录音完整保留".into();
                             });
                         } else if !matches!(&e,tungstenite::Error::Io(e) if e.kind()==std::io::ErrorKind::WouldBlock)
                         {
@@ -167,12 +170,6 @@ pub(super) fn run(
                 });
             }
         }
-        if last_save.elapsed() > Duration::from_secs(3) {
-            if let Err(e) = save(&view, &c.directory) {
-                mutate(&view, |v| v.warning = e)
-            }
-            last_save = Instant::now();
-        }
         thread::sleep(Duration::from_millis(5));
     }
     if let Ok(mut w) = wave.lock() {
@@ -184,12 +181,4 @@ pub(super) fn run(
         v.phase = "ended".into();
         v.connection = "closed".into();
     });
-    if let Err(e) = save(&view, &c.directory) {
-        mutate(&view, |v| v.error = e)
-    }
-    if let Ok(v) = view.lock() {
-        if let Ok(mut last) = LAST.lock() {
-            *last = v.clone();
-        }
-    }
 }

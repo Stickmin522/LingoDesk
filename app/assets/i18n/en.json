@@ -241,5 +241,9 @@
   "原文超过 2,000 字符，无法自动重译。": "The original exceeds 2,000 characters and cannot be retranslated automatically.",
   "字幕已有新的修改，请重新打开后重试。": "This paragraph has newer edits. Reopen it to retry.",
   "重命名": "Rename",
-  "记录名称不能为空": "Recording name cannot be empty"
+  "记录名称不能为空": "Recording name cannot be empty",
+  "停止录音": "Stop recording",
+  "录音尚未保存": "Recording not saved",
+  "放弃": "Discard",
+  "请先停止录音": "Stop recording first"
 }

@@ -241,5 +241,9 @@
   "原文超过 2,000 字符，无法自动重译。": "Lampas sa 2,000 karakter ang orihinal at hindi maaaring awtomatikong isalin muli.",
   "字幕已有新的修改，请重新打开后重试。": "May mas bagong pagbabago sa talatang ito. Buksan itong muli upang subukan ulit.",
   "重命名": "Palitan ang pangalan",
-  "记录名称不能为空": "Hindi maaaring blangko ang pangalan ng recording"
+  "记录名称不能为空": "Hindi maaaring blangko ang pangalan ng recording",
+  "停止录音": "Itigil ang pagrekord",
+  "录音尚未保存": "Hindi pa naka-save ang recording",
+  "放弃": "Itapon",
+  "请先停止录音": "Itigil muna ang pagrekord"
 }

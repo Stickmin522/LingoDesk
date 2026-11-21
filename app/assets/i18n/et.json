@@ -241,5 +241,9 @@
   "原文超过 2,000 字符，无法自动重译。": "Algtekst ületab 2 000 tähemärki ja seda ei saa automaatselt uuesti tõlkida.",
   "字幕已有新的修改，请重新打开后重试。": "Selles lõigus on uuemaid muudatusi. Proovimiseks avage see uuesti.",
   "重命名": "Nimeta ümber",
-  "记录名称不能为空": "Salvestise nimi ei tohi olla tühi"
+  "记录名称不能为空": "Salvestise nimi ei tohi olla tühi",
+  "停止录音": "Peata salvestamine",
+  "录音尚未保存": "Salvestis pole salvestatud",
+  "放弃": "Loobu",
+  "请先停止录音": "Peata esmalt salvestamine"
 }

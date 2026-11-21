@@ -241,5 +241,9 @@
   "原文超过 2,000 字符，无法自动重译。": "Originalen overstiger 2 000 tegn og kan ikke oversettes på nytt automatisk.",
   "字幕已有新的修改，请重新打开后重试。": "Dette avsnittet har nyere endringer. Åpne det på nytt for å prøve igjen.",
   "重命名": "Gi nytt navn",
-  "记录名称不能为空": "Opptaksnavnet kan ikke være tomt"
+  "记录名称不能为空": "Opptaksnavnet kan ikke være tomt",
+  "停止录音": "Stopp opptak",
+  "录音尚未保存": "Opptaket er ikke lagret",
+  "放弃": "Forkast",
+  "请先停止录音": "Stopp opptaket først"
 }

@@ -241,5 +241,9 @@
   "原文超过 2,000 字符，无法自动重译。": "Originál překračuje 2 000 znaků a nelze jej automaticky znovu přeložit.",
   "字幕已有新的修改，请重新打开后重试。": "Tento odstavec má novější úpravy. Znovu jej otevřete a opakujte pokus.",
   "重命名": "Přejmenovat",
-  "记录名称不能为空": "Název nahrávky nesmí být prázdný"
+  "记录名称不能为空": "Název nahrávky nesmí být prázdný",
+  "停止录音": "Zastavit nahrávání",
+  "录音尚未保存": "Nahrávka není uložena",
+  "放弃": "Zahodit",
+  "请先停止录音": "Nejprve zastavte nahrávání"
 }

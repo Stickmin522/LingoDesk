@@ -21,17 +21,36 @@ class MainActivity : FlutterActivity() {
     private var pending: MethodChannel.Result?=null
     private var resuming=false
     private var title=""
-    private var exportRequest: JSONObject?=null
+    private var exportSnapshot: Pair<String, JSONObject>? = null
     private var player: MediaPlayer?=null
     private val executor=Executors.newSingleThreadExecutor()
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        discardFinishedDraft(cleanupOnly = savedInstanceState != null)
+        super.onCreate(savedInstanceState)
+    }
+    private fun discardFinishedDraft(cleanupOnly: Boolean = false) {
+        NativeCore.command(JSONObject().put("op", "discardRecording")
+            .put("cleanupOnly", cleanupOnly)
+            .put("directory", SettingsStore.directory(this)).toString())
+    }
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) { super.configureFlutterEngine(flutterEngine); bridge=Bridge(this,flutterEngine,this) }
     override fun onResume() { super.onResume(); visible=true; SessionService.instance?.refreshOverlay() }
     override fun onStop() { super.onStop(); visible=false; if(!isChangingConfigurations && pending==null) SessionService.instance?.refreshOverlay() }
-    override fun onDestroy() { bridge?.close(); stopPlayback(); executor.shutdown(); super.onDestroy() }
+    override fun onDestroy() {
+        if (isFinishing) discardFinishedDraft()
+        bridge?.close()
+        stopPlayback()
+        executor.shutdown()
+        super.onDestroy()
+    }
     fun requestStart(recordTitle: String,result: MethodChannel.Result) {
         if(pending!=null) {result.error("busy","正在等待授权",null);return}
         val state=JSONObject(NativeCore.command("{\"op\":\"snapshot\"}"))
         if(state.optString("phase") !in listOf("idle","ended")){result.error("busy","已有录音正在运行",null);return}
+        if (state.optBoolean("pendingSave")) {
+            result.error("busy", "录音尚未保存", null)
+            return
+        }
         if(SettingsStore.readKey(this).isBlank()){result.error("key","请先保存 LecSync API Key",null);return}
         stopPlayback(); resuming=false; pending=result; title=recordTitle
         val permissions=mutableListOf<String>()
@@ -54,9 +73,83 @@ class MainActivity : FlutterActivity() {
     fun setOverlay(enabled:Boolean,result:MethodChannel.Result){if(!enabled){SettingsStore.save(this,JSONObject().put("overlay",false));SessionService.instance?.refreshOverlay();result.success("{}");return};if(pending!=null){result.error("busy","正在等待授权",null);return};if(!Settings.canDrawOverlays(this)){pending=result;startActivityForResult(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:$packageName")),103)}else enableOverlay(result)}
     private fun enableOverlay(result:MethodChannel.Result?){try{SettingsStore.save(this,JSONObject().put("overlay",true));SessionService.instance?.enableOverlay();result?.success("{}")}catch(e:Exception){result?.error("overlay",e.message,null)}}
     @Deprecated("Activity result compatibility")
-    override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){super.onActivityResult(requestCode,resultCode,data);when(requestCode){102->if(resultCode==Activity.RESULT_OK&&data!=null)launchRecording(resultCode,data)else{pending?.error("permission","已取消系统音频授权",null);pending=null};103->{val r=pending;pending=null;if(Settings.canDrawOverlays(this))enableOverlay(r)else r?.error("permission","未开启显示在其他应用上层权限",null)};104->{val r=pending;val req=exportRequest;pending=null;exportRequest=null;if(resultCode!=Activity.RESULT_OK || data?.data==null || req==null){r?.success("{\"cancelled\":true}");return};val uri=data.data!!;executor.execute{val success=runCatching{val response=JSONObject(NativeCore.command(req.toString()));if(response.has("error"))error(response.optString("error"));contentResolver.openOutputStream(uri)?.use{out->if(req.optString("format")=="wav") File(response.getString("audioPath")).inputStream().use{it.copyTo(out)} else out.write(response.getString("content").toByteArray(Charsets.UTF_8))}?:error("无法写入选定文件")};runOnUiThread{success.fold({r?.success("{\"saved\":true}")},{r?.error("export",it.message,null)})}}}}}
-    fun exportRecord(input:JSONObject,result:MethodChannel.Result){if(pending!=null){result.error("busy","正在等待另一个操作",null);return};input.put("op","export").put("directory",SettingsStore.directory(this));val response=JSONObject(NativeCore.command(input.toString()));if(response.has("error")){result.error("export",response.optString("error"),null);return};pending=result;exportRequest=input;val format=input.optString("format","txt");startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(when(format){"wav"->"audio/wav";"json"->"application/json";"srt"->"application/x-subrip";else->"text/plain"}).putExtra(Intent.EXTRA_TITLE,response.getString("filename")),104)}
-    fun playRecord(input:JSONObject){stopPlayback();val v=JSONObject(NativeCore.command(JSONObject().put("op","load").put("directory",SettingsStore.directory(this)).put("id",input.getString("id")).toString()));if(v.has("error"))error(v.optString("error"));player=MediaPlayer().apply{setDataSource(v.getString("audioPath"));setOnPreparedListener{it.start()};setOnCompletionListener{stopPlayback()};prepareAsync()}}
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        when (requestCode) {
+            102 -> if (resultCode == Activity.RESULT_OK && data != null) {
+                launchRecording(resultCode, data)
+            } else {
+                pending?.error("permission", "已取消系统音频授权", null)
+                pending = null
+            }
+            103 -> {
+                val result = pending
+                pending = null
+                if (Settings.canDrawOverlays(this)) enableOverlay(result)
+                else result?.error("permission", "未开启显示在其他应用上层权限", null)
+            }
+            104 -> finishExport(resultCode, data?.data)
+        }
+    }
+
+    fun exportRecord(input: JSONObject, result: MethodChannel.Result) {
+        if (pending != null) {
+            result.error("busy", "正在等待另一个操作", null)
+            return
+        }
+        input.put("op", "export").put("directory", SettingsStore.directory(this))
+        val snapshot = JSONObject(NativeCore.command(input.toString()))
+        if (snapshot.has("error")) {
+            result.error("export", snapshot.optString("error"), null)
+            return
+        }
+        val format = input.optString("format", "txt")
+        pending = result
+        exportSnapshot = format to snapshot
+        try {
+            startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT)
+                .addCategory(Intent.CATEGORY_OPENABLE)
+                .setType(when (format) {
+                    "wav" -> "audio/wav"
+                    "json" -> "application/json"
+                    "srt" -> "application/x-subrip"
+                    else -> "text/plain"
+                })
+                .putExtra(Intent.EXTRA_TITLE, snapshot.getString("filename")), 104)
+        } catch (error: Exception) {
+            pending = null
+            exportSnapshot = null
+            throw error
+        }
+    }
+
+    private fun finishExport(resultCode: Int, uri: Uri?) {
+        val result = pending
+        val export = exportSnapshot
+        pending = null
+        exportSnapshot = null
+        if (resultCode != Activity.RESULT_OK || uri == null || export == null) {
+            result?.success("{\"cancelled\":true}")
+            return
+        }
+        val (format, snapshot) = export
+        executor.execute {
+            val saved = runCatching {
+                contentResolver.openOutputStream(uri)?.use { output ->
+                    if (format == "wav") {
+                        File(snapshot.getString("audioPath")).inputStream().use { it.copyTo(output) }
+                    } else {
+                        output.write(snapshot.getString("content").toByteArray(Charsets.UTF_8))
+                    }
+                } ?: error("无法写入选定文件")
+            }
+            runOnUiThread {
+                saved.fold({ result?.success("{\"saved\":true}") }, { result?.error("export", it.message, null) })
+            }
+        }
+    }
+
+    fun playRecord(input:JSONObject){stopPlayback();val v=JSONObject(NativeCore.command(JSONObject().put("op","load").put("directory",SettingsStore.directory(this)).put("id",input.getString("id")).toString()));if(v.has("error") && !v.has("id"))error(v.optString("error"));player=MediaPlayer().apply{setDataSource(v.getString("audioPath"));setOnPreparedListener{it.start()};setOnCompletionListener{stopPlayback()};prepareAsync()}}
     fun stopPlayback(){player?.release();player=null}
     fun openLecSyncConsole(){
         val intent=Intent(Intent.ACTION_VIEW,Uri.parse("https://www.lecsync.com/dashboard/api"))

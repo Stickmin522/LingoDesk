@@ -241,5 +241,9 @@
   "原文超过 2,000 字符，无法自动重译。": "Oriģināls pārsniedz 2 000 rakstzīmes, un to nevar automātiski pārtulkot vēlreiz.",
   "字幕已有新的修改，请重新打开后重试。": "Šajā rindkopā ir jaunāki labojumi. Atveriet to vēlreiz un mēģiniet atkārtoti.",
   "重命名": "Pārdēvēt",
-  "记录名称不能为空": "Ieraksta nosaukums nedrīkst būt tukšs"
+  "记录名称不能为空": "Ieraksta nosaukums nedrīkst būt tukšs",
+  "停止录音": "Apturēt ierakstīšanu",
+  "录音尚未保存": "Ieraksts nav saglabāts",
+  "放弃": "Atmest",
+  "请先停止录音": "Vispirms apturiet ierakstīšanu"
 }

@@ -241,5 +241,9 @@
   "原文超过 2,000 字符，无法自动重译。": "Die oorspronklike teks oorskry 2 000 karakters en kan nie outomaties hervertaal word nie.",
   "字幕已有新的修改，请重新打开后重试。": "Hierdie paragraaf het nuwe wysigings. Maak dit weer oop om weer te probeer.",
   "重命名": "Hernoem",
-  "记录名称不能为空": "Opnamenaam mag nie leeg wees nie"
+  "记录名称不能为空": "Opnamenaam mag nie leeg wees nie",
+  "停止录音": "Stop opname",
+  "录音尚未保存": "Opname nie gestoor nie",
+  "放弃": "Gooi weg",
+  "请先停止录音": "Stop eers die opname"
 }

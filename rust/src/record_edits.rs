@@ -12,7 +12,7 @@ pub(super) fn update_shared(
     change(&mut updated)?;
     write_record(&updated, directory)?;
     *raw = updated.clone();
-    if raw.phase == "ended" {
+    if raw.phase == "ended" && !raw.pending_save {
         if let Ok(mut last) = LAST.lock() {
             *last = updated.clone();
         }

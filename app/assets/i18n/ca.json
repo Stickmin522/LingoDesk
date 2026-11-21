@@ -241,5 +241,9 @@
   "原文超过 2,000 字符，无法自动重译。": "L'original supera els 2.000 caràcters i no es pot retraduir automàticament.",
   "字幕已有新的修改，请重新打开后重试。": "Aquest paràgraf té canvis nous. Torna'l a obrir per reintentar-ho.",
   "重命名": "Canvia el nom",
-  "记录名称不能为空": "El nom de l’enregistrament no pot estar buit"
+  "记录名称不能为空": "El nom de l’enregistrament no pot estar buit",
+  "停止录音": "Atura l’enregistrament",
+  "录音尚未保存": "Enregistrament sense desar",
+  "放弃": "Descarta",
+  "请先停止录音": "Atura primer l’enregistrament"
 }

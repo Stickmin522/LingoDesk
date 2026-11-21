@@ -241,5 +241,9 @@
   "原文超过 2,000 字符，无法自动重译。": "Jatorrizkoak 2.000 karaktere baino gehiago ditu eta ezin da automatikoki berritzuli.",
   "字幕已有新的修改，请重新打开后重试。": "Paragrafo honek aldaketa berriak ditu. Ireki berriro saiatzeko.",
   "重命名": "Aldatu izena",
-  "记录名称不能为空": "Grabazioaren izena ezin da hutsik egon"
+  "记录名称不能为空": "Grabazioaren izena ezin da hutsik egon",
+  "停止录音": "Gelditu grabazioa",
+  "录音尚未保存": "Grabazioa ez da gorde",
+  "放弃": "Baztertu",
+  "请先停止录音": "Gelditu grabazioa lehenik"
 }

@@ -241,5 +241,9 @@
   "原文超过 2,000 字符，无法自动重译。": "Orijinal mətn 2 000 simvoldan çoxdur və avtomatik yenidən tərcümə edilə bilməz.",
   "字幕已有新的修改，请重新打开后重试。": "Bu abzasda yeni dəyişikliklər var. Yenidən cəhd etmək üçün təkrar açın.",
   "重命名": "Adını dəyiş",
-  "记录名称不能为空": "Yazının adı boş ola bilməz"
+  "记录名称不能为空": "Yazının adı boş ola bilməz",
+  "停止录音": "Yazını dayandır",
+  "录音尚未保存": "Yazı saxlanmayıb",
+  "放弃": "Ləğv et",
+  "请先停止录音": "Əvvəlcə yazını dayandırın"
 }
